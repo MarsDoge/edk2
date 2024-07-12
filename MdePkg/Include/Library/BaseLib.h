@@ -332,8 +332,10 @@ DisableLocalInterrupts (
 
   @param  Index  Specifies the register number of the CPUCFG to read the data.
   @param  Data   A pointer to the variable used to store the CPUCFG register value.
+
+  @return       The return value of cpucfg.
 **/
-VOID
+UINT32
 AsmCpucfg (
   IN  UINT32  Index,
   OUT UINT32  *Data

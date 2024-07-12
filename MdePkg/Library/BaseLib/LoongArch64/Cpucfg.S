@@ -16,11 +16,14 @@ ASM_GLOBAL ASM_PFX(AsmCpucfg)
 #  @param   a0 Specifies the register number of the CPUCFG to read the data.
 #  @param   a1 Pointer to the variable used to store the CPUCFG register value.
 #
+#  @return  The return value of cpucfg.
+#
 #**/
 
 ASM_PFX(AsmCpucfg):
   cpucfg  $t0, $a0
   stptr.w $t0, $a1, 0
+  move    $a0, $t0
 
   jirl    $zero, $ra, 0
   .end
