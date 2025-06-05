@@ -829,7 +829,7 @@ class PlatformAutoGen(AutoGen):
                 RetVal = RetVal + _SplitOption(Flags.strip())
         return RetVal
 
-    ## Compute a tool defintion key priority value in range 0..15
+    ## Compute a tool definition key priority value in range 0..15
     #
     #  TARGET_TOOLCHAIN_ARCH_COMMANDTYPE_ATTRIBUTE  15
     #  ******_TOOLCHAIN_ARCH_COMMANDTYPE_ATTRIBUTE  14

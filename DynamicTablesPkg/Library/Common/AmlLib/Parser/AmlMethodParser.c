@@ -915,7 +915,7 @@ AmlFindMethodDefinition (
                  ))
     {
       // The path matches an alias. Resolve the alias and check whether
-      // this is a method defintion.
+      // this is a method definition.
       Status = AmlResolveAliasMethod (
                  BestNameSpaceRefNode->NodeRef,
                  NameSpaceRefList,
