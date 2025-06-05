@@ -15,7 +15,7 @@
 #include <Library/SerialPortLib.h>
 
 //
-// PCI Defintions.
+// PCI Definitions.
 //
 #define PCI_BRIDGE_32_BIT_IO_SPACE  0x01
 
