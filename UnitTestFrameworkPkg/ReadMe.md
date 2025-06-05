@@ -758,7 +758,7 @@ MOCK_FUNCTION_DEFINITION(MockUefiLib, GetVariable2, 4, EFIAPI);
 MOCK_FUNCTION_DEFINITION(MockUefiLib, GetEfiGlobalVariable2, 3, EFIAPI);
 ```
 
-When creating the defintions, there are a few things to keep in mind.
+When creating the definitions, there are a few things to keep in mind.
 
 First, when using `MOCK_FUNCTION_DEFINITION`, some functions being mocked do
 not specify a calling convention. In this case, it is fine to leave the last

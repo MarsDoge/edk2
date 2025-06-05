@@ -15,7 +15,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <Library/PeiServicesLib.h>
 
 //
-// The protocols, PPI and GUID defintions for this module
+// The protocols, PPI and GUID definitions for this module
 //
 #include <Ppi/MasterBootMode.h>
 #include <Ppi/BootInRecoveryMode.h>
