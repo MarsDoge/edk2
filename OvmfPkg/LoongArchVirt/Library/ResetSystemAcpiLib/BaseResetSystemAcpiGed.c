@@ -7,6 +7,7 @@
 
 **/
 
+#include <IndustryStandard/Acpi.h>
 #include <Library/DebugLib.h>
 #include <Library/MemoryAllocationLib.h>
 #include <Library/QemuFwCfgLib.h>
