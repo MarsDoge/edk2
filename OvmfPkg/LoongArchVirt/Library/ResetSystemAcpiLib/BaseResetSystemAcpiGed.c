@@ -7,6 +7,7 @@
 
 **/
 
+#include <PiDxe.h>
 #include <IndustryStandard/Acpi.h>
 #include <Library/DebugLib.h>
 #include <Library/MemoryAllocationLib.h>
