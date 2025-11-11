@@ -418,7 +418,6 @@
 !if $(TPM2_ENABLE) == TRUE
   gEfiSecurityPkgTokenSpaceGuid.PcdTpmBaseAddress                      | 0x0
   gEfiSecurityPkgTokenSpaceGuid.PcdTpmInstanceGuid                     | {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-  gEfiSecurityPkgTokenSpaceGuid.PcdTpm2HashMask                        | 0
 !endif
 
 #######################################################################################
@@ -482,6 +481,13 @@
   gEfiMdePkgTokenSpaceGuid.PcdPciExpressBaseAddress                    |0xFFFFFFFFFFFFFFFF
 
 !include NetworkPkg/NetworkDynamicPcds.dsc.inc
+
+  #
+  # TPM2 support
+  #
+!if $(TPM2_ENABLE) == TRUE
+  gEfiSecurityPkgTokenSpaceGuid.PcdTpm2HashMask                        | 0
+!endif
 
   #
   # SMBIOS entry point version
