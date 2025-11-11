@@ -149,10 +149,19 @@
   CustomizedDisplayLib             | MdeModulePkg/Library/CustomizedDisplayLib/CustomizedDisplayLib.inf
   DebugPrintErrorLevelLib          | MdePkg/Library/BaseDebugPrintErrorLevelLib/BaseDebugPrintErrorLevelLib.inf
   TpmMeasurementLib                | MdeModulePkg/Library/TpmMeasurementLibNull/TpmMeasurementLibNull.inf
+!if $(SECURE_BOOT_ENABLE) == TRUE
+  PlatformSecureLib                | OvmfPkg/Library/PlatformSecureLib/PlatformSecureLib.inf
+  AuthVariableLib                  | SecurityPkg/Library/AuthVariableLib/AuthVariableLib.inf
+  SecureBootVariableLib            | SecurityPkg/Library/SecureBootVariableLib/SecureBootVariableLib.inf
+  SecureBootVariableProvisionLib   | SecurityPkg/Library/SecureBootVariableProvisionLib/SecureBootVariableProvisionLib.inf
+  PlatformPKProtectionLib          | SecurityPkg/Library/PlatformPKProtectionLibVarPolicy/PlatformPKProtectionLibVarPolicy.inf
+!else
   AuthVariableLib                  | MdeModulePkg/Library/AuthVariableLibNull/AuthVariableLibNull.inf
+!endif
   VarCheckLib                      | MdeModulePkg/Library/VarCheckLib/VarCheckLib.inf
   VariablePolicyLib                | MdeModulePkg/Library/VariablePolicyLib/VariablePolicyLib.inf
   VariablePolicyHelperLib          | MdeModulePkg/Library/VariablePolicyHelperLib/VariablePolicyHelperLib.inf
+  VariableFlashInfoLib             | MdeModulePkg/Library/BaseVariableFlashInfoLib/BaseVariableFlashInfoLib.inf
   SortLib                          | MdeModulePkg/Library/UefiSortLib/UefiSortLib.inf
   FdtLib                           | MdePkg/Library/BaseFdtLib/BaseFdtLib.inf
   PciSegmentLib                    | MdePkg/Library/BasePciSegmentLibPci/BasePciSegmentLibPci.inf
@@ -174,6 +183,8 @@
   RngLib                           | MdeModulePkg/Library/BaseRngLibTimerLib/BaseRngLibTimerLib.inf
 
 !include OvmfPkg/Include/Dsc/ShellLibs.dsc.inc
+
+  ShellCEntryLib                   | ShellPkg/Library/UefiShellCEntryLib/UefiShellCEntryLib.inf
 
 !if $(HTTP_BOOT_ENABLE) == TRUE
   HttpLib                          | MdeModulePkg/Library/DxeHttpLib/DxeHttpLib.inf
@@ -267,6 +278,9 @@
   VariablePolicyLib                | MdeModulePkg/Library/VariablePolicyLib/VariablePolicyLibRuntimeDxe.inf
   QemuFwCfgLib                     | OvmfPkg/Library/QemuFwCfgLib/QemuFwCfgMmioDxeLib.inf
   ResetSystemLib                   | OvmfPkg/LoongArchVirt/Library/ResetSystemAcpiLib/DxeResetSystemAcpiGedLib.inf
+!if $(SECURE_BOOT_ENABLE) == TRUE
+  BaseCryptLib                     | CryptoPkg/Library/BaseCryptLib/RuntimeCryptLib.inf
+!endif
 !if $(TARGET) != RELEASE
   DebugLib                         | MdePkg/Library/DxeRuntimeDebugLibSerialPort/DxeRuntimeDebugLibSerialPort.inf
 !endif
@@ -317,6 +331,10 @@
   gEfiMdeModulePkgTokenSpaceGuid.PcdPciBusHotplugDeviceSupport         | FALSE
   gUefiOvmfPkgTokenSpaceGuid.PcdQemuBootOrderPciTranslation            | TRUE
   gUefiOvmfPkgTokenSpaceGuid.PcdQemuBootOrderMmioTranslation           | TRUE
+!if $(SECURE_BOOT_ENABLE) == TRUE
+  gUefiOvmfPkgTokenSpaceGuid.PcdSecureBootSupported                    | TRUE
+  gEfiMdeModulePkgTokenSpaceGuid.PcdRequireSelfSignedPk                | TRUE
+!endif
 [PcdsFixedAtBuild]
 ## BaseLib ##
   gEfiMdePkgTokenSpaceGuid.PcdMaximumUnicodeStringLength               | 1000000
@@ -330,6 +348,13 @@
   gEfiMdeModulePkgTokenSpaceGuid.PcdResetOnMemoryTypeInformationChange | FALSE
   gEfiMdePkgTokenSpaceGuid.PcdMaximumGuidedExtractHandler              | 0x10
   gEfiMdeModulePkgTokenSpaceGuid.PcdMaxVariableSize                    | 0x2000
+!if $(SECURE_BOOT_ENABLE) == TRUE
+  gEfiMdeModulePkgTokenSpaceGuid.PcdMaxAuthVariableSize                | 0x2800
+  gEfiMdeModulePkgTokenSpaceGuid.PcdVariableStoreSize                  | 0x40000
+  gEfiSecurityPkgTokenSpaceGuid.PcdOptionRomImageVerificationPolicy    | 0x04
+  gEfiSecurityPkgTokenSpaceGuid.PcdFixedMediaImageVerificationPolicy   | 0x04
+  gEfiSecurityPkgTokenSpaceGuid.PcdRemovableMediaImageVerificationPolicy | 0x04
+!endif
   gEfiMdeModulePkgTokenSpaceGuid.PcdMaxHardwareErrorVariableSize       | 0x8000
   gEfiMdeModulePkgTokenSpaceGuid.PcdVpdBaseAddress                     | 0x0
   gEfiMdePkgTokenSpaceGuid.PcdReportStatusCodePropertyMask             | 0x07
@@ -498,7 +523,19 @@
   MdeModulePkg/Universal/WatchdogTimerDxe/WatchdogTimer.inf
   MdeModulePkg/Universal/MonotonicCounterRuntimeDxe/MonotonicCounterRuntimeDxe.inf
   MdeModulePkg/Universal/CapsuleRuntimeDxe/CapsuleRuntimeDxe.inf
+!if $(SECURE_BOOT_ENABLE) == TRUE
+  MdeModulePkg/Universal/SecurityStubDxe/SecurityStubDxe.inf {
+    <LibraryClasses>
+      NULL|SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.inf
+!if $(TPM2_ENABLE) == TRUE
+      NULL|SecurityPkg/Library/DxeTpm2MeasureBootLib/DxeTpm2MeasureBootLib.inf
+!endif
+  }
+  SecurityPkg/VariableAuthenticated/SecureBootConfigDxe/SecureBootConfigDxe.inf
+  SecurityPkg/VariableAuthenticated/SecureBootDefaultKeysDxe/SecureBootDefaultKeysDxe.inf
+!else
   MdeModulePkg/Universal/SecurityStubDxe/SecurityStubDxe.inf
+!endif
   OvmfPkg/LoongArchVirt/Drivers/StableTimerDxe/TimerDxe.inf
   MdeModulePkg/Universal/ResetSystemRuntimeDxe/ResetSystemRuntimeDxe.inf
   MdeModulePkg/Universal/Metronome/Metronome.inf
@@ -547,6 +584,9 @@
   MdeModulePkg/Universal/DisplayEngineDxe/DisplayEngineDxe.inf
   MdeModulePkg/Universal/SetupBrowserDxe/SetupBrowserDxe.inf
   MdeModulePkg/Universal/BdsDxe/BdsDxe.inf
+!if $(SECURE_BOOT_ENABLE) == TRUE
+  OvmfPkg/EnrollDefaultKeys/EnrollDefaultKeys.inf
+!endif
   MdeModulePkg/Logo/LogoDxe.inf
   MdeModulePkg/Universal/HiiDatabaseDxe/HiiDatabaseDxe.inf
   MdeModulePkg/Application/UiApp/UiApp.inf {
