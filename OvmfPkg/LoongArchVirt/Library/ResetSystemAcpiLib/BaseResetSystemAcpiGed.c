@@ -131,11 +131,10 @@ Done:
   @retval EFI_SUCCESS     Initialize mPowerManager success.
   @retval EFI_NOT_FOUND   Failed to initialize mPowerManager.
 **/
-EFI_STATUS
+RETURN_STATUS
 EFIAPI
 ResetSystemLibConstructor (
-  IN EFI_HANDLE        ImageHandle,
-  IN EFI_SYSTEM_TABLE  *SystemTable
+  VOID
   )
 {
   EFI_STATUS  Status;
@@ -149,5 +148,5 @@ ResetSystemLibConstructor (
   ASSERT (mPowerManager.SleepStatusRegAddr);
   ASSERT (mPowerManager.ResetRegAddr);
 
-  return Status;
+  return (RETURN_STATUS)Status;
 }
