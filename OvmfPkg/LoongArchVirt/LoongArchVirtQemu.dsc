@@ -415,10 +415,6 @@
 !else
   gEfiMdePkgTokenSpaceGuid.PcdDebugPropertyMask                        | 0x2f
 !endif
-!if $(TPM2_ENABLE) == TRUE
-  gEfiSecurityPkgTokenSpaceGuid.PcdTpmBaseAddress                      | 0x0
-  gEfiSecurityPkgTokenSpaceGuid.PcdTpmInstanceGuid                     | {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-!endif
 
 #######################################################################################
   gUefiOvmfPkgTokenSpaceGuid.PcdOvmfSecPeiTempRamBase                  | $(SEC_PEI_TEMP_RAM_BASE)
@@ -486,6 +482,8 @@
   # TPM2 support
   #
 !if $(TPM2_ENABLE) == TRUE
+  gEfiSecurityPkgTokenSpaceGuid.PcdTpmBaseAddress                      | 0x0
+  gEfiSecurityPkgTokenSpaceGuid.PcdTpmInstanceGuid                     | {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
   gEfiSecurityPkgTokenSpaceGuid.PcdTpm2HashMask                        | 0
 !endif
 
