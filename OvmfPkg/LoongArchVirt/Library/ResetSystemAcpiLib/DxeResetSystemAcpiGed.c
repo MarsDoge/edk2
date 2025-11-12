@@ -8,6 +8,7 @@
 **/
 
 #include <Base.h>
+#include <IndustryStandard/Acpi.h>
 #include <Library/DebugLib.h>
 #include <Library/DxeServicesTableLib.h>
 #include <Library/UefiBootServicesTableLib.h>

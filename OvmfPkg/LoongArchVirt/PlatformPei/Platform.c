@@ -19,6 +19,7 @@
 //
 #include <Guid/MemoryTypeInformation.h>
 #include <Guid/FdtHob.h>
+#include <Library/BaseLib.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/CpuMmuInitLib.h>
 #include <Library/DebugLib.h>
@@ -55,6 +56,20 @@ CONST EFI_PEI_PPI_DESCRIPTOR  mPpiListBootMode = {
   &gEfiPeiMasterBootModePpiGuid,
   NULL
 };
+
+#if TPM2_ENABLE
+CONST EFI_PEI_PPI_DESCRIPTOR  mTpm2DiscoveredPpi = {
+  (EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST),
+  &gOvmfTpmDiscoveredPpiGuid,
+  NULL
+};
+
+STATIC
+VOID
+SetupTpmResources (
+  CONST VOID  *Fdt
+  );
+#endif
 
 STATIC EFI_BOOT_MODE  mBootMode = BOOT_WITH_FULL_CONFIGURATION;
 
@@ -268,6 +283,10 @@ AddFdtHob (
   Base = (VOID *)(UINTN)PcdGet64 (PcdDeviceTreeInitialBaseAddress);
   ASSERT (Base != NULL);
 
+#if TPM2_ENABLE
+  SetupTpmResources (Base);
+#endif
+
   Status = GetRtcAddress (Base, &RtcBaseAddress);
   if (RETURN_ERROR (Status)) {
     return;
@@ -363,3 +382,117 @@ InitializePlatform (
 
   return EFI_SUCCESS;
 }
+#if TPM2_ENABLE
+STATIC
+VOID
+SetupTpmResources (
+  CONST VOID  *Fdt
+  )
+{
+  INT32         Node;
+  INT32         Prev;
+  INT32         Parent;
+  INT32         Depth;
+  CONST CHAR8   *Compatible;
+  CONST CHAR8   *CompItem;
+  INT32         Len;
+  INT32         RangesLen;
+  CONST UINT8   *RegProp;
+  CONST UINT32  *RangesProp;
+  UINT64        TpmBase;
+  UINT64        TpmBaseSize;
+
+  if ((Fdt == NULL) || (FdtCheckHeader (Fdt) != 0)) {
+    return;
+  }
+
+  TpmBase     = 0;
+  TpmBaseSize = 0;
+  Parent      = 0;
+
+  for (Prev = Depth = 0; ; Prev = Node) {
+    Node = FdtNextNode (Fdt, Prev, &Depth);
+    if (Node < 0) {
+      break;
+    }
+
+    if (Depth == 1) {
+      Parent = Node;
+    }
+
+    Compatible = FdtGetProp (Fdt, Node, "compatible", &Len);
+    if (Compatible == NULL) {
+      continue;
+    }
+
+    for (CompItem = Compatible;
+         (CompItem != NULL) && (CompItem < Compatible + Len);
+         CompItem += 1 + AsciiStrLen (CompItem))
+    {
+      if (AsciiStrCmp (CompItem, "tcg,tpm-tis-mmio") != 0) {
+        continue;
+      }
+
+      RegProp = FdtGetProp (Fdt, Node, "reg", &Len);
+      if (RegProp == NULL) {
+        break;
+      }
+
+      if (Len == sizeof (UINT32) * 2) {
+        TpmBase     = Fdt32ToCpu (*(UINT32 *)RegProp);
+        TpmBaseSize = Fdt32ToCpu (*(UINT32 *)(RegProp + sizeof (UINT32)));
+      } else if (Len == sizeof (UINT64) * 2) {
+        TpmBase     = Fdt64ToCpu (ReadUnaligned64 ((CONST UINT64 *)RegProp));
+        TpmBaseSize = Fdt64ToCpu (ReadUnaligned64 ((CONST UINT64 *)(RegProp + sizeof (UINT64))));
+      } else {
+        DEBUG ((DEBUG_WARN, "%a: unexpected TPM 'reg' size %d\n", __func__, Len));
+        break;
+      }
+
+      if (Depth > 1) {
+        RangesProp = (CONST UINT32 *)FdtGetProp (Fdt, Parent, "ranges", &RangesLen);
+        if (RangesProp != NULL) {
+          if (RangesLen != 0) {
+            if (RangesLen != Len + 2 * sizeof (UINT32)) {
+              DEBUG ((
+                DEBUG_WARN,
+                "%a: 'ranges' property has unexpected size %d\n",
+                __func__,
+                RangesLen
+                ));
+              break;
+            }
+
+            if (Len == sizeof (UINT32) * 2) {
+              TpmBase -= Fdt32ToCpu (RangesProp[0]);
+            } else {
+              TpmBase -= Fdt64ToCpu (ReadUnaligned64 ((CONST UINT64 *)RangesProp));
+            }
+
+            RangesProp = (CONST UINT32 *)((CONST UINT8 *)RangesProp + Len / 2);
+            TpmBase   += Fdt64ToCpu (ReadUnaligned64 ((CONST UINT64 *)RangesProp));
+          }
+        }
+      }
+
+      break;
+    }
+  }
+
+  if (TpmBase != 0) {
+    BuildResourceDescriptorHob (
+      EFI_RESOURCE_MEMORY_MAPPED_IO,
+      EFI_RESOURCE_ATTRIBUTE_PRESENT     |
+      EFI_RESOURCE_ATTRIBUTE_INITIALIZED |
+      EFI_RESOURCE_ATTRIBUTE_UNCACHEABLE |
+      EFI_RESOURCE_ATTRIBUTE_TESTED,
+      TpmBase,
+      ALIGN_VALUE (TpmBaseSize, EFI_PAGE_SIZE)
+      );
+
+    ASSERT_EFI_ERROR ((EFI_STATUS)PcdSet64S (PcdTpmBaseAddress, TpmBase));
+    ASSERT_EFI_ERROR (PeiServicesInstallPpi (&mTpm2DiscoveredPpi));
+  }
+}
+#endif
+
