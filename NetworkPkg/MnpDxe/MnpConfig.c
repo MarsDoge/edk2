@@ -38,6 +38,12 @@ EFI_MANAGED_NETWORK_CONFIG_DATA  mMnpDefaultConfigData = {
   FALSE
 };
 
+EFI_STATUS
+MnpAddFreeNbuf (
+  IN OUT MNP_DEVICE_DATA  *MnpDeviceData,
+  IN     UINTN            Count
+  );
+
 STATIC
 UINT32
 MnpCalculateBufferLength (
