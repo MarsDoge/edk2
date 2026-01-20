@@ -38,6 +38,87 @@ EFI_MANAGED_NETWORK_CONFIG_DATA  mMnpDefaultConfigData = {
   FALSE
 };
 
+EFI_STATUS
+MnpAddFreeNbuf (
+  IN OUT MNP_DEVICE_DATA  *MnpDeviceData,
+  IN     UINTN            Count
+  );
+
+STATIC
+UINT32
+MnpCalculateBufferLength (
+  IN EFI_SIMPLE_NETWORK_MODE  *SnpMode
+  )
+{
+  return SnpMode->MediaHeaderSize + NET_VLAN_TAG_LEN + SnpMode->MaxPacketSize + NET_ETHER_FCS_SIZE;
+}
+
+STATIC
+UINT32
+MnpCalculatePaddingSize (
+  IN EFI_SIMPLE_NETWORK_MODE  *SnpMode
+  )
+{
+  //
+  // Make sure the protocol headers immediately following the media header
+  // 4-byte aligned, and also preserve additional space for VLAN tag.
+  //
+  return ((4 - SnpMode->MediaHeaderSize) & 0x3) + NET_VLAN_TAG_LEN;
+}
+
+STATIC
+EFI_STATUS
+MnpRefreshBufferPool (
+  IN OUT MNP_DEVICE_DATA  *MnpDeviceData
+  )
+{
+  EFI_SIMPLE_NETWORK_MODE  *SnpMode;
+  UINT32                   NewBufferLength;
+  UINT32                   NewPaddingSize;
+  EFI_STATUS               Status;
+
+  SnpMode         = MnpDeviceData->Snp->Mode;
+  NewBufferLength = MnpCalculateBufferLength (SnpMode);
+  NewPaddingSize  = MnpCalculatePaddingSize (SnpMode);
+
+  if (NewBufferLength <= MnpDeviceData->BufferLength) {
+    return EFI_SUCCESS;
+  }
+
+  if (MnpDeviceData->RxNbufCache != NULL) {
+    MnpFreeNbuf (MnpDeviceData, MnpDeviceData->RxNbufCache);
+    MnpDeviceData->RxNbufCache = NULL;
+  }
+
+  if (MnpDeviceData->FreeNbufQue.BufNum != 0) {
+    MnpDeviceData->NbufCnt -= MnpDeviceData->FreeNbufQue.BufNum;
+    NetbufQueFlush (&MnpDeviceData->FreeNbufQue);
+  }
+
+  MnpDeviceData->BufferLength = NewBufferLength;
+  MnpDeviceData->PaddingSize  = NewPaddingSize;
+
+  Status = MnpAddFreeNbuf (MnpDeviceData, MNP_INIT_NET_BUFFER_NUM);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "MnpRefreshBufferPool: MnpAddFreeNbuf failed, %r.\n", Status));
+    return Status;
+  }
+
+  MnpDeviceData->RxNbufCache = MnpAllocNbuf (MnpDeviceData);
+  if (MnpDeviceData->RxNbufCache == NULL) {
+    DEBUG ((DEBUG_ERROR, "MnpRefreshBufferPool: MnpAllocNbuf failed.\n"));
+    return EFI_OUT_OF_RESOURCES;
+  }
+
+  NetbufAllocSpace (
+    MnpDeviceData->RxNbufCache,
+    MnpDeviceData->BufferLength,
+    NET_BUF_TAIL
+    );
+
+  return EFI_SUCCESS;
+}
+
 /**
   Add Count of net buffers to MnpDeviceData->FreeNbufQue. The length of the net
   buffer is specified by MnpDeviceData->BufferLength.
@@ -468,13 +549,13 @@ MnpInitializeDeviceData (
   // from SNP. Do this before fill the FreeNetBufQue.
   //
   //
-  MnpDeviceData->BufferLength = SnpMode->MediaHeaderSize + NET_VLAN_TAG_LEN + SnpMode->MaxPacketSize + NET_ETHER_FCS_SIZE;
+  MnpDeviceData->BufferLength = MnpCalculateBufferLength (SnpMode);
 
   //
   // Make sure the protocol headers immediately following the media header
   // 4-byte aligned, and also preserve additional space for VLAN tag
   //
-  MnpDeviceData->PaddingSize = ((4 - SnpMode->MediaHeaderSize) & 0x3) + NET_VLAN_TAG_LEN;
+  MnpDeviceData->PaddingSize = MnpCalculatePaddingSize (SnpMode);
 
   //
   // Initialize MAC string which will be used as VLAN configuration variable name
@@ -1216,6 +1297,13 @@ MnpStart (
       Status = MnpStartSnp (MnpDeviceData->Snp);
       if (EFI_ERROR (Status)) {
         DEBUG ((DEBUG_ERROR, "MnpStart: MnpStartSnp failed, %r.\n", Status));
+
+        goto ErrorExit;
+      }
+
+      Status = MnpRefreshBufferPool (MnpDeviceData);
+      if (EFI_ERROR (Status)) {
+        DEBUG ((DEBUG_ERROR, "MnpStart: MnpRefreshBufferPool failed, %r.\n", Status));
 
         goto ErrorExit;
       }
