@@ -11,8 +11,8 @@ DEFINE BLOCK_SIZE                 = 0x1000
 ############################################################################
 # FW total
 DEFINE FW_BASE_ADDRESS            = 0x1c000000
-DEFINE FW_BLOCKS                  = 0x400
-DEFINE FW_SIZE                    = 0x400000
+DEFINE FW_BLOCKS                  = 0x800
+DEFINE FW_SIZE                    = 0x800000
 
 ############################################################################
 #Set FVMAIN size
