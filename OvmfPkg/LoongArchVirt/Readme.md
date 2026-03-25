@@ -60,6 +60,11 @@ Note: Please refer to QEMU compilation rules, located in qemu/doc/system/loongar
     -bios Build/LoongArchVirtQemu/RELEASE_GCC/FV/QEMU_EFI.fd \
     -serial stdio
 
+## TPM2 and Secure Boot validation
+
+For LoongArch TPM2 and Secure Boot enablement, build flags, QEMU launch options,
+and guest-side validation steps, see [Tpm2SecureBootValidation.md](Tpm2SecureBootValidation.md).
+
 ## Test LoongArch QEMU virtual machine OS
 
 * Download ArchLinux QCOW [images](https://mirrors.pku.edu.cn/loongarch/archlinux/images) for LoongArch.

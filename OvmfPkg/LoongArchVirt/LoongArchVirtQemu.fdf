@@ -136,6 +136,16 @@ INF  OvmfPkg/VirtioGpuDxe/VirtioGpu.inf
 INF  OvmfPkg/PlatformDxe/Platform.inf
 
 #
+# TPM2 support
+#
+!if $(TPM2_ENABLE) == TRUE
+INF  SecurityPkg/Tcg/Tcg2Dxe/Tcg2Dxe.inf
+!if $(TPM2_CONFIG_ENABLE) == TRUE
+INF  SecurityPkg/Tcg/Tcg2Config/Tcg2ConfigDxe.inf
+!endif
+!endif
+
+#
 # SCSI
 #
 INF  MdeModulePkg/Bus/Scsi/ScsiBusDxe/ScsiBusDxe.inf
@@ -246,6 +256,12 @@ INF  OvmfPkg/LoongArchVirt/Sec/SecMain.inf
 INF  MdeModulePkg/Core/Pei/PeiMain.inf
 INF  MdeModulePkg/Universal/PCD/Pei/Pcd.inf
 INF  OvmfPkg/LoongArchVirt/PlatformPei/PlatformPei.inf
+!if $(TPM2_ENABLE) == TRUE
+INF  SecurityPkg/Tcg/Tcg2Pei/Tcg2Pei.inf
+!if $(TPM2_CONFIG_ENABLE) == TRUE
+INF  OvmfPkg/Tcg/Tcg2Config/Tcg2ConfigPei.inf
+!endif
+!endif
 INF  MdeModulePkg/Core/DxeIplPeim/DxeIpl.inf
 
 #

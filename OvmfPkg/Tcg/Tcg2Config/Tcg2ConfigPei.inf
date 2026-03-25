@@ -55,3 +55,6 @@
 
 [Depex.RISCV64]
   gOvmfTpmDiscoveredPpiGuid
+
+[Depex.LOONGARCH64]
+  gOvmfTpmDiscoveredPpiGuid

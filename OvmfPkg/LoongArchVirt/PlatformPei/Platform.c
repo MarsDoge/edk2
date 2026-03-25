@@ -17,6 +17,7 @@
 //
 // The Library classes this module consumes
 //
+#include <Library/BaseLib.h>
 #include <Guid/MemoryTypeInformation.h>
 #include <Guid/FdtHob.h>
 #include <Library/BaseMemoryLib.h>
@@ -53,6 +54,18 @@ STATIC EFI_MEMORY_TYPE_INFORMATION  mDefaultMemoryTypeInformation[] = {
 CONST EFI_PEI_PPI_DESCRIPTOR  mPpiListBootMode = {
   (EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST),
   &gEfiPeiMasterBootModePpiGuid,
+  NULL
+};
+
+STATIC CONST EFI_PEI_PPI_DESCRIPTOR  mTpm2DiscoveredPpi = {
+  EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST,
+  &gOvmfTpmDiscoveredPpiGuid,
+  NULL
+};
+
+STATIC CONST EFI_PEI_PPI_DESCRIPTOR  mTpm2InitializationDonePpi = {
+  EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST,
+  &gPeiTpmInitializationDonePpiGuid,
   NULL
 };
 
@@ -122,6 +135,112 @@ SaveRtcRegisterAddressHob (
     (VOID *)&Data64,
     sizeof (UINT64)
     );
+}
+
+STATIC
+VOID
+SetupTpmResources (
+  IN CONST VOID  *Fdt
+  )
+{
+  INT32         Node;
+  INT32         Prev;
+  INT32         Parent;
+  INT32         Depth;
+  INT32         Len;
+  INT32         RangesLen;
+  CONST CHAR8   *Compatible;
+  CONST CHAR8   *CompItem;
+  CONST UINT8   *RegProp;
+  CONST UINT32  *RangesProp;
+  UINT64        TpmBase;
+  UINT64        TpmSize;
+  EFI_STATUS    Status;
+
+  TpmBase = 0;
+  TpmSize = 0;
+  Parent  = 0;
+
+  for (Prev = Depth = 0; ; Prev = Node) {
+    Node = FdtNextNode (Fdt, Prev, &Depth);
+    if (Node < 0) {
+      break;
+    }
+
+    if (Depth == 1) {
+      Parent = Node;
+    }
+
+    Compatible = FdtGetProp (Fdt, Node, "compatible", &Len);
+    for (CompItem = Compatible; CompItem != NULL && CompItem < Compatible + Len;
+         CompItem += 1 + AsciiStrLen (CompItem))
+    {
+      if (AsciiStrCmp (CompItem, "tcg,tpm-tis-mmio") != 0) {
+        continue;
+      }
+
+      RegProp = FdtGetProp (Fdt, Node, "reg", &Len);
+      ASSERT (Len == 8 || Len == 16);
+      if (Len == 8) {
+        TpmBase = Fdt32ToCpu (*(CONST UINT32 *)RegProp);
+        TpmSize = Fdt32ToCpu (*(CONST UINT32 *)(RegProp + sizeof (UINT32)));
+      } else {
+        TpmBase = Fdt64ToCpu (ReadUnaligned64 ((CONST UINT64 *)RegProp));
+        TpmSize = Fdt64ToCpu (ReadUnaligned64 ((CONST UINT64 *)(RegProp + sizeof (UINT64))));
+      }
+
+      if (Depth > 1) {
+        RangesProp = FdtGetProp (Fdt, Parent, "ranges", &RangesLen);
+        ASSERT (RangesProp != NULL);
+
+        if (RangesLen != 0) {
+          if (RangesLen != Len + 2 * sizeof (UINT32)) {
+            DEBUG ((
+              DEBUG_WARN,
+              "%a: 'ranges' property has unexpected size %d\n",
+              __func__,
+              RangesLen
+              ));
+            TpmBase = 0;
+            TpmSize = 0;
+            break;
+          }
+
+          if (Len == 8) {
+            TpmBase -= Fdt32ToCpu (RangesProp[0]);
+          } else {
+            TpmBase -= Fdt64ToCpu (ReadUnaligned64 ((CONST UINT64 *)RangesProp));
+          }
+
+          RangesProp = (CONST UINT32 *)((CONST UINT8 *)RangesProp + Len / 2);
+          TpmBase   += Fdt64ToCpu (ReadUnaligned64 ((CONST UINT64 *)RangesProp));
+        }
+      }
+
+      break;
+    }
+  }
+
+  if (TpmSize != 0) {
+    BuildResourceDescriptorHob (
+      EFI_RESOURCE_MEMORY_MAPPED_IO,
+      EFI_RESOURCE_ATTRIBUTE_PRESENT     |
+      EFI_RESOURCE_ATTRIBUTE_INITIALIZED |
+      EFI_RESOURCE_ATTRIBUTE_UNCACHEABLE |
+      EFI_RESOURCE_ATTRIBUTE_TESTED,
+      TpmBase,
+      ALIGN_VALUE (TpmSize, EFI_PAGE_SIZE)
+      );
+
+    DEBUG ((DEBUG_INFO, "%a: TPM @ 0x%Lx size 0x%Lx\n", __func__, TpmBase, TpmSize));
+    Status = (EFI_STATUS)PcdSet64S (PcdTpmBaseAddress, TpmBase);
+    ASSERT_EFI_ERROR (Status);
+    Status = PeiServicesInstallPpi (&mTpm2DiscoveredPpi);
+  } else {
+    Status = PeiServicesInstallPpi (&mTpm2InitializationDonePpi);
+  }
+
+  ASSERT_EFI_ERROR (Status);
 }
 
 /**
@@ -274,6 +393,7 @@ AddFdtHob (
   }
 
   SaveRtcRegisterAddressHob (RtcBaseAddress);
+  SetupTpmResources (Base);
 
   FdtSize  = FdtTotalSize (Base) + PcdGet32 (PcdDeviceTreeAllocationPadding);
   FdtPages = EFI_SIZE_TO_PAGES (FdtSize);
