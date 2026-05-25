@@ -301,30 +301,54 @@ Transaction (
       ((SpiChip->SpiHc->Attributes & HC_SUPPORTS_WRITE_ONLY_OPERATIONS) != HC_SUPPORTS_WRITE_ONLY_OPERATIONS))
   {
     // Convert to full duplex transaction
-    SpiChip->BusTransaction.ReadBytes  = SpiChip->BusTransaction.WriteBytes;
-    SpiChip->BusTransaction.ReadBuffer = AllocateZeroPool (SpiChip->BusTransaction.ReadBytes);
+    DummyReadBuffer = AllocateZeroPool (SpiChip->BusTransaction.WriteBytes);
+    if (DummyReadBuffer == NULL) {
+      SpiChipSelect (
+        SpiChip,
+        !SpiChip->BusTransaction.SpiPeripheral->SpiPart->ChipSelectPolarity
+        );
+      return EFI_OUT_OF_RESOURCES;
+    }
+
+    SpiChip->BusTransaction.TransactionType = SPI_TRANSACTION_FULL_DUPLEX;
+    SpiChip->BusTransaction.ReadBytes       = SpiChip->BusTransaction.WriteBytes;
+    SpiChip->BusTransaction.ReadBuffer      = DummyReadBuffer;
 
     Status = SpiChip->SpiHc->Transaction (
                                SpiChip->SpiHc,
                                &SpiChip->BusTransaction
                                );
 
-    SpiChip->BusTransaction.ReadBytes = ReadBytes; // assign to passed parameter
-    FreePool (SpiChip->BusTransaction.ReadBuffer); // Free temporary buffer
+    FreePool (DummyReadBuffer);
+    SpiChip->BusTransaction.TransactionType = TransactionType;
+    SpiChip->BusTransaction.ReadBytes       = ReadBytes;
+    SpiChip->BusTransaction.ReadBuffer      = ReadBuffer;
   } else if ((TransactionType == SPI_TRANSACTION_READ_ONLY) &&
              ((SpiChip->SpiHc->Attributes & HC_SUPPORTS_READ_ONLY_OPERATIONS) != HC_SUPPORTS_READ_ONLY_OPERATIONS))
   {
     // Convert to full duplex transaction
-    SpiChip->BusTransaction.WriteBytes  = SpiChip->BusTransaction.WriteBytes;
-    SpiChip->BusTransaction.WriteBuffer = AllocateZeroPool (SpiChip->BusTransaction.WriteBytes);
+    DummyWriteBuffer = AllocateZeroPool (SpiChip->BusTransaction.ReadBytes);
+    if (DummyWriteBuffer == NULL) {
+      SpiChipSelect (
+        SpiChip,
+        !SpiChip->BusTransaction.SpiPeripheral->SpiPart->ChipSelectPolarity
+        );
+      return EFI_OUT_OF_RESOURCES;
+    }
+
+    SpiChip->BusTransaction.TransactionType = SPI_TRANSACTION_FULL_DUPLEX;
+    SpiChip->BusTransaction.WriteBytes      = SpiChip->BusTransaction.ReadBytes;
+    SpiChip->BusTransaction.WriteBuffer     = DummyWriteBuffer;
 
     Status = SpiChip->SpiHc->Transaction (
                                SpiChip->SpiHc,
                                &SpiChip->BusTransaction
                                );
 
-    SpiChip->BusTransaction.WriteBytes = WriteBytes;
-    FreePool (SpiChip->BusTransaction.WriteBuffer);
+    FreePool (DummyWriteBuffer);
+    SpiChip->BusTransaction.TransactionType = TransactionType;
+    SpiChip->BusTransaction.WriteBytes      = WriteBytes;
+    SpiChip->BusTransaction.WriteBuffer     = WriteBuffer;
   } else if ((TransactionType == SPI_TRANSACTION_WRITE_THEN_READ) &&
              ((SpiChip->SpiHc->Attributes & HC_SUPPORTS_WRITE_THEN_READ_OPERATIONS) != HC_SUPPORTS_WRITE_THEN_READ_OPERATIONS))
   {
