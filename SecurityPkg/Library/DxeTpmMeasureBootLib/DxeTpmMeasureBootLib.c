@@ -208,6 +208,18 @@ TcgMeasureGptTable (
     return EFI_DEVICE_ERROR;
   }
 
+  {
+    UINT32  CalculatedCrc32;
+
+    Status = gBS->CalculateCrc32 (EntryPtr, AllocSize, &CalculatedCrc32);
+    if (EFI_ERROR (Status) || (CalculatedCrc32 != PrimaryHeader->PartitionEntryArrayCRC32)) {
+      DEBUG ((DEBUG_ERROR, "Invalid GPT Partition Entry Array CRC32!\n"));
+      FreePool (PrimaryHeader);
+      FreePool (EntryPtr);
+      return EFI_DEVICE_ERROR;
+    }
+  }
+
   //
   // Count all partition entries described by the GPT header
   //
