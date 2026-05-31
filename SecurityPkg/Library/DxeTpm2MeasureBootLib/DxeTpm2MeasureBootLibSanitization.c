@@ -30,6 +30,7 @@
 #include <IndustryStandard/UefiTcgPlatform.h>
 #include <Protocol/BlockIo.h>
 #include <Library/MemoryAllocationLib.h>
+#include <Library/UefiBootServicesTableLib.h>
 
 #include "DxeTpm2MeasureBootLibSanitization.h"
 
@@ -64,10 +65,12 @@
 EFI_STATUS
 EFIAPI
 Tpm2SanitizeEfiPartitionTableHeader (
-  IN CONST EFI_PARTITION_TABLE_HEADER  *PrimaryHeader,
+  IN OUT EFI_PARTITION_TABLE_HEADER    *PrimaryHeader,
   IN CONST EFI_BLOCK_IO_PROTOCOL       *BlockIo
   )
 {
+  EFI_STATUS  Status;
+
   //
   // Verify that the input parameters are safe to use
   //
@@ -103,6 +106,20 @@ Tpm2SanitizeEfiPartitionTableHeader (
   if ((PrimaryHeader->Header.HeaderSize < sizeof (EFI_PARTITION_TABLE_HEADER)) || (PrimaryHeader->Header.HeaderSize > BlockIo->Media->BlockSize)) {
     DEBUG ((DEBUG_ERROR, "Invalid Partition Table Header HeaderSize!\n"));
     return EFI_DEVICE_ERROR;
+  }
+
+  {
+    UINT32  OriginalCrc32;
+    UINT32  CalculatedCrc32;
+
+    OriginalCrc32             = PrimaryHeader->Header.CRC32;
+    PrimaryHeader->Header.CRC32 = 0;
+    Status                    = gBS->CalculateCrc32 (PrimaryHeader, PrimaryHeader->Header.HeaderSize, &CalculatedCrc32);
+    PrimaryHeader->Header.CRC32 = OriginalCrc32;
+    if (EFI_ERROR (Status) || (OriginalCrc32 != CalculatedCrc32)) {
+      DEBUG ((DEBUG_ERROR, "Invalid Partition Table Header CRC32!\n"));
+      return EFI_DEVICE_ERROR;
+    }
   }
 
   //

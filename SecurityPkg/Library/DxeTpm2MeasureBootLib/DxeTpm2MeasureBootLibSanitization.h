@@ -54,7 +54,7 @@
 EFI_STATUS
 EFIAPI
 Tpm2SanitizeEfiPartitionTableHeader (
-  IN CONST EFI_PARTITION_TABLE_HEADER  *PrimaryHeader,
+  IN OUT EFI_PARTITION_TABLE_HEADER    *PrimaryHeader,
   IN CONST EFI_BLOCK_IO_PROTOCOL       *BlockIo
   );
 
