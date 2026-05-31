@@ -140,10 +140,8 @@ Tcg2MeasureGptTable (
   EFI_BLOCK_IO_PROTOCOL        *BlockIo;
   EFI_DISK_IO_PROTOCOL         *DiskIo;
   EFI_PARTITION_TABLE_HEADER   *PrimaryHeader;
-  EFI_PARTITION_ENTRY          *PartitionEntry;
   UINT8                        *EntryPtr;
   UINTN                        NumberOfPartition;
-  UINT32                       Index;
   UINT8                        *EventPtr;
   EFI_TCG2_EVENT               *Tcg2Event;
   EFI_CC_EVENT                 *CcEvent;
@@ -235,17 +233,9 @@ Tcg2MeasureGptTable (
   }
 
   //
-  // Count the valid partition
+  // Count all partition entries described by the GPT header
   //
-  PartitionEntry    = (EFI_PARTITION_ENTRY *)EntryPtr;
-  NumberOfPartition = 0;
-  for (Index = 0; Index < PrimaryHeader->NumberOfPartitionEntries; Index++) {
-    if (!IsZeroGuid (&PartitionEntry->PartitionTypeGUID)) {
-      NumberOfPartition++;
-    }
-
-    PartitionEntry = (EFI_PARTITION_ENTRY *)((UINT8 *)PartitionEntry + PrimaryHeader->SizeOfPartitionEntry);
-  }
+  NumberOfPartition = PrimaryHeader->NumberOfPartitionEntries;
 
   //
   // Prepare Data for Measurement (CcProtocol and Tcg2Protocol)
@@ -272,27 +262,14 @@ Tcg2MeasureGptTable (
   GptData                         = (EFI_GPT_DATA *)Tcg2Event->Event;
 
   //
-  // Copy the EFI_PARTITION_TABLE_HEADER and NumberOfPartition
+  // Copy the EFI_PARTITION_TABLE_HEADER and complete partition entry array
   //
   CopyMem ((UINT8 *)GptData, (UINT8 *)PrimaryHeader, sizeof (EFI_PARTITION_TABLE_HEADER));
   GptData->NumberOfPartitions = NumberOfPartition;
   //
-  // Copy the valid partition entry
+  // Copy the complete partition entry array
   //
-  PartitionEntry    = (EFI_PARTITION_ENTRY *)EntryPtr;
-  NumberOfPartition = 0;
-  for (Index = 0; Index < PrimaryHeader->NumberOfPartitionEntries; Index++) {
-    if (!IsZeroGuid (&PartitionEntry->PartitionTypeGUID)) {
-      CopyMem (
-        (UINT8 *)&GptData->Partitions + NumberOfPartition * PrimaryHeader->SizeOfPartitionEntry,
-        (UINT8 *)PartitionEntry,
-        PrimaryHeader->SizeOfPartitionEntry
-        );
-      NumberOfPartition++;
-    }
-
-    PartitionEntry = (EFI_PARTITION_ENTRY *)((UINT8 *)PartitionEntry + PrimaryHeader->SizeOfPartitionEntry);
-  }
+  CopyMem ((UINT8 *)&GptData->Partitions, EntryPtr, AllocSize);
 
   //
   // Only one of TCG2_PROTOCOL or CC_MEASUREMENT_PROTOCOL is exposed.
