@@ -70,6 +70,9 @@ TpmSanitizeEfiPartitionTableHeader (
   )
 {
   EFI_STATUS  Status;
+  UINT64      EntryArraySize;
+  UINT64      EntryArrayBlocks;
+  UINT64      EntryArrayLastBlock;
 
   // Verify that the input parameters are safe to use
   if (PrimaryHeader == NULL) {
@@ -80,6 +83,16 @@ TpmSanitizeEfiPartitionTableHeader (
   if ((BlockIo == NULL) || (BlockIo->Media == NULL)) {
     DEBUG ((DEBUG_ERROR, "Invalid BlockIo!\n"));
     return EFI_INVALID_PARAMETER;
+  }
+
+  if (BlockIo->Media->BlockSize == 0) {
+    DEBUG ((DEBUG_ERROR, "Invalid BlockIo Media BlockSize!\n"));
+    return EFI_DEVICE_ERROR;
+  }
+
+  if (BlockIo->Media->LastBlock < 1) {
+    DEBUG ((DEBUG_ERROR, "Invalid BlockIo Media LastBlock!\n"));
+    return EFI_DEVICE_ERROR;
   }
 
   // The signature must be EFI_PTAB_HEADER_ID ("EFI PART" in ASCII)
@@ -114,6 +127,19 @@ TpmSanitizeEfiPartitionTableHeader (
     }
   }
 
+  if (PrimaryHeader->MyLBA != 1) {
+    DEBUG ((DEBUG_ERROR, "GPT Primary Header MyLBA is not primary GPT LBA!\n"));
+    return EFI_DEVICE_ERROR;
+  }
+
+  if ((PrimaryHeader->AlternateLBA > BlockIo->Media->LastBlock) ||
+      (PrimaryHeader->FirstUsableLBA > PrimaryHeader->LastUsableLBA) ||
+      (PrimaryHeader->LastUsableLBA > BlockIo->Media->LastBlock))
+  {
+    DEBUG ((DEBUG_ERROR, "Invalid GPT usable or alternate LBA range!\n"));
+    return EFI_DEVICE_ERROR;
+  }
+
   // check that the PartitionEntryLBA greater than the Max LBA
   // This will be used later for multiplication
   if (PrimaryHeader->PartitionEntryLBA > DivU64x32 (MAX_UINT64, BlockIo->Media->BlockSize)) {
@@ -137,6 +163,33 @@ TpmSanitizeEfiPartitionTableHeader (
   // This check will be used later for multiplication
   if (PrimaryHeader->NumberOfPartitionEntries > DivU64x32 (MAX_UINT64, PrimaryHeader->SizeOfPartitionEntry)) {
     DEBUG ((DEBUG_ERROR, "Invalid Partition Table Header NumberOfPartitionEntries!\n"));
+    return EFI_DEVICE_ERROR;
+  }
+
+  EntryArraySize = MultU64x32 (PrimaryHeader->NumberOfPartitionEntries, PrimaryHeader->SizeOfPartitionEntry);
+  if ((EntryArraySize == 0) || (EntryArraySize > MAX_UINT32)) {
+    DEBUG ((DEBUG_ERROR, "Invalid GPT Partition Entry Array size!\n"));
+    return EFI_DEVICE_ERROR;
+  }
+
+  if (EntryArraySize > MAX_UINT64 - BlockIo->Media->BlockSize + 1) {
+    DEBUG ((DEBUG_ERROR, "GPT Partition Entry Array block rounding overflow!\n"));
+    return EFI_DEVICE_ERROR;
+  }
+
+  EntryArrayBlocks = DivU64x32 (EntryArraySize + BlockIo->Media->BlockSize - 1, BlockIo->Media->BlockSize);
+  if ((EntryArrayBlocks == 0) || (PrimaryHeader->PartitionEntryLBA > MAX_UINT64 - EntryArrayBlocks + 1)) {
+    DEBUG ((DEBUG_ERROR, "GPT Partition Entry Array LBA overflow!\n"));
+    return EFI_DEVICE_ERROR;
+  }
+
+  EntryArrayLastBlock = PrimaryHeader->PartitionEntryLBA + EntryArrayBlocks - 1;
+  if ((PrimaryHeader->PartitionEntryLBA > BlockIo->Media->LastBlock) ||
+      (EntryArrayLastBlock > BlockIo->Media->LastBlock) ||
+      ((PrimaryHeader->PartitionEntryLBA <= PrimaryHeader->LastUsableLBA) &&
+       (EntryArrayLastBlock >= PrimaryHeader->FirstUsableLBA)))
+  {
+    DEBUG ((DEBUG_ERROR, "GPT Partition Entry Array is outside media bounds or overlaps usable LBAs!\n"));
     return EFI_DEVICE_ERROR;
   }
 
