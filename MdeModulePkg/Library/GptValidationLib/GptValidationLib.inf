@@ -1,0 +1,25 @@
+## @file
+#  GPT validation library.
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = GptValidationLib
+  FILE_GUID                      = 5E6F8B88-3589-4D0B-A665-49B65C31B8F2
+  MODULE_TYPE                    = BASE
+  VERSION_STRING                 = 1.0
+  LIBRARY_CLASS                  = GptValidationLib
+
+[Sources]
+  GptValidationLib.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+
+[LibraryClasses]
+  BaseLib
+  DebugLib

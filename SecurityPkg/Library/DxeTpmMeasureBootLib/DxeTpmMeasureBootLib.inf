@@ -53,6 +53,7 @@
   BaseLib
   SecurityManagementLib
   HobLib
+  GptValidationLib
 
 [Guids]
   gMeasuredFvHobGuid                    ## SOMETIMES_CONSUMES ## HOB

@@ -44,6 +44,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <Library/PeCoffLib.h>
 #include <Library/SecurityManagementLib.h>
 #include <Library/HobLib.h>
+#include <Library/GptValidationLib.h>
 #include <Protocol/CcMeasurement.h>
 
 #include "DxeTpm2MeasureBootLibSanitization.h"
@@ -232,20 +233,16 @@ Tcg2MeasureGptTable (
     return EFI_DEVICE_ERROR;
   }
 
-  {
-    UINT32  CalculatedCrc32;
-
-    Status = gBS->CalculateCrc32 (EntryPtr, AllocSize, &CalculatedCrc32);
-    if (EFI_ERROR (Status) || (CalculatedCrc32 != PrimaryHeader->PartitionEntryArrayCRC32)) {
-      DEBUG ((DEBUG_ERROR, "Invalid GPT Partition Entry Array CRC32!\n"));
-      FreePool (PrimaryHeader);
-      FreePool (EntryPtr);
-      return EFI_DEVICE_ERROR;
-    }
+  Status = GptValidatePartitionEntryArrayCrc (PrimaryHeader, EntryPtr, AllocSize);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "Invalid GPT Partition Entry Array CRC32!\n"));
+    FreePool (PrimaryHeader);
+    FreePool (EntryPtr);
+    return EFI_DEVICE_ERROR;
   }
 
   //
-  // Count all partition entries described by the GPT header
+  // Measure every partition entry covered by the GPT partition entry array CRC.
   //
   NumberOfPartition = PrimaryHeader->NumberOfPartitionEntries;
 
@@ -274,12 +271,12 @@ Tcg2MeasureGptTable (
   GptData                         = (EFI_GPT_DATA *)Tcg2Event->Event;
 
   //
-  // Copy the EFI_PARTITION_TABLE_HEADER and complete partition entry array
+  // Copy the EFI_PARTITION_TABLE_HEADER and NumberOfPartition
   //
   CopyMem ((UINT8 *)GptData, (UINT8 *)PrimaryHeader, sizeof (EFI_PARTITION_TABLE_HEADER));
   GptData->NumberOfPartitions = NumberOfPartition;
   //
-  // Copy the complete partition entry array
+  // Copy the complete partition entry array, including unused entries.
   //
   CopyMem ((UINT8 *)&GptData->Partitions, EntryPtr, AllocSize);
 

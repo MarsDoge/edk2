@@ -19,6 +19,7 @@
 
 [Packages]
   MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
 
 [LibraryClasses]
   BaseLib
@@ -26,3 +27,4 @@
   UnitTestLib
   PrintLib
   SafeIntLib
+  GptValidationLib

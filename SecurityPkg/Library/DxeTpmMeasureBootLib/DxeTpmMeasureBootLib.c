@@ -42,6 +42,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <Library/PeCoffLib.h>
 #include <Library/SecurityManagementLib.h>
 #include <Library/HobLib.h>
+#include <Library/GptValidationLib.h>
 
 #include "DxeTpmMeasureBootLibSanitization.h"
 
@@ -132,10 +133,8 @@ TcgMeasureGptTable (
   EFI_BLOCK_IO_PROTOCOL       *BlockIo;
   EFI_DISK_IO_PROTOCOL        *DiskIo;
   EFI_PARTITION_TABLE_HEADER  *PrimaryHeader;
-  EFI_PARTITION_ENTRY         *PartitionEntry;
   UINT8                       *EntryPtr;
   UINTN                       NumberOfPartition;
-  UINT32                      Index;
   TCG_PCR_EVENT               *TcgEvent;
   EFI_GPT_DATA                *GptData;
   UINT32                      EventSize;
@@ -208,20 +207,16 @@ TcgMeasureGptTable (
     return EFI_DEVICE_ERROR;
   }
 
-  {
-    UINT32  CalculatedCrc32;
-
-    Status = gBS->CalculateCrc32 (EntryPtr, AllocSize, &CalculatedCrc32);
-    if (EFI_ERROR (Status) || (CalculatedCrc32 != PrimaryHeader->PartitionEntryArrayCRC32)) {
-      DEBUG ((DEBUG_ERROR, "Invalid GPT Partition Entry Array CRC32!\n"));
-      FreePool (PrimaryHeader);
-      FreePool (EntryPtr);
-      return EFI_DEVICE_ERROR;
-    }
+  Status = GptValidatePartitionEntryArrayCrc (PrimaryHeader, EntryPtr, AllocSize);
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "Invalid GPT Partition Entry Array CRC32!\n"));
+    FreePool (PrimaryHeader);
+    FreePool (EntryPtr);
+    return EFI_DEVICE_ERROR;
   }
 
   //
-  // Count all partition entries described by the GPT header
+  // Measure every partition entry covered by the GPT partition entry array CRC.
   //
   NumberOfPartition = PrimaryHeader->NumberOfPartitionEntries;
 
@@ -248,12 +243,12 @@ TcgMeasureGptTable (
   GptData             = (EFI_GPT_DATA *)TcgEvent->Event;
 
   //
-  // Copy the EFI_PARTITION_TABLE_HEADER and complete partition entry array
+  // Copy the EFI_PARTITION_TABLE_HEADER and NumberOfPartition
   //
   CopyMem ((UINT8 *)GptData, (UINT8 *)PrimaryHeader, sizeof (EFI_PARTITION_TABLE_HEADER));
   GptData->NumberOfPartitions = NumberOfPartition;
   //
-  // Copy the complete partition entry array
+  // Copy the complete partition entry array, including unused entries.
   //
   CopyMem ((UINT8 *)&GptData->Partitions, EntryPtr, AllocSize);
 
