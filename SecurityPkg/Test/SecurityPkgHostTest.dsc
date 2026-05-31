@@ -19,6 +19,7 @@
 !include UnitTestFrameworkPkg/UnitTestFrameworkPkgHost.dsc.inc
 
 [LibraryClasses]
+  GptValidationLib|MdeModulePkg/Library/GptValidationLib/GptValidationLib.inf
   SafeIntLib|MdePkg/Library/BaseSafeIntLib/BaseSafeIntLib.inf
 
 [Components]

@@ -31,6 +31,9 @@
   Library/BrotliCustomDecompressLib/brotli/c/include
 
 [LibraryClasses]
+  ##  @libraryclass  Shared helpers for validating GPT metadata.
+  GptValidationLib|Include/Library/GptValidationLib.h
+
   ##  @libraryclass  Defines a set of methods to reset whole system.
   ResetSystemLib|Include/Library/ResetSystemLib.h
 
