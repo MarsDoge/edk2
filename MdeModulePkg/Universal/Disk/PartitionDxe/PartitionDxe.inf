@@ -47,6 +47,7 @@
 
 [Packages]
   MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
 
 
 [LibraryClasses]
@@ -58,6 +59,7 @@
   BaseLib
   UefiDriverEntryPoint
   DebugLib
+  GptValidationLib
 
 
 [Guids]

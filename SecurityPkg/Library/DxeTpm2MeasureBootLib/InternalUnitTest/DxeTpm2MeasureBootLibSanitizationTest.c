@@ -11,7 +11,9 @@
 #include <Library/UnitTestLib.h>
 #include <Protocol/BlockIo.h>
 #include <Library/MemoryAllocationLib.h>
+#include <Library/BaseLib.h>
 #include <Library/BaseMemoryLib.h>
+#include <Library/GptValidationLib.h>
 #include <IndustryStandard/UefiTcgPlatform.h>
 #include <Protocol/Tcg2Protocol.h>
 
@@ -23,6 +25,51 @@
 #define DEFAULT_PRIMARY_TABLE_HEADER_REVISION                     0x00010000
 #define DEFAULT_PRIMARY_TABLE_HEADER_NUMBER_OF_PARTITION_ENTRIES  1
 #define DEFAULT_PRIMARY_TABLE_HEADER_SIZE_OF_PARTITION_ENTRY      128
+
+STATIC
+VOID
+UpdatePrimaryHeaderCrc (
+  IN OUT EFI_PARTITION_TABLE_HEADER  *PrimaryHeader
+  )
+{
+  PrimaryHeader->Header.CRC32 = 0;
+  PrimaryHeader->Header.CRC32 = CalculateCrc32 ((UINT8 *)PrimaryHeader, PrimaryHeader->Header.HeaderSize);
+}
+
+STATIC
+VOID
+InitValidGptTestContext (
+  OUT EFI_PARTITION_TABLE_HEADER  *PrimaryHeader,
+  OUT EFI_BLOCK_IO_PROTOCOL       *BlockIo,
+  OUT EFI_BLOCK_IO_MEDIA          *BlockMedia
+  )
+{
+  ZeroMem (PrimaryHeader, sizeof (*PrimaryHeader));
+  ZeroMem (BlockIo, sizeof (*BlockIo));
+  ZeroMem (BlockMedia, sizeof (*BlockMedia));
+
+  BlockMedia->MediaId          = 1;
+  BlockMedia->MediaPresent     = TRUE;
+  BlockMedia->BlockSize        = 512;
+  BlockMedia->IoAlign          = 1;
+  BlockMedia->LastBlock        = 5;
+
+  BlockIo->Revision = 1;
+  BlockIo->Media    = BlockMedia;
+
+  PrimaryHeader->Header.Signature         = EFI_PTAB_HEADER_ID;
+  PrimaryHeader->Header.Revision          = DEFAULT_PRIMARY_TABLE_HEADER_REVISION;
+  PrimaryHeader->Header.HeaderSize        = sizeof (EFI_PARTITION_TABLE_HEADER);
+  PrimaryHeader->MyLBA                    = PRIMARY_PART_HEADER_LBA;
+  PrimaryHeader->PartitionEntryLBA        = 2;
+  PrimaryHeader->AlternateLBA             = 3;
+  PrimaryHeader->FirstUsableLBA           = 4;
+  PrimaryHeader->LastUsableLBA            = 5;
+  PrimaryHeader->NumberOfPartitionEntries = DEFAULT_PRIMARY_TABLE_HEADER_NUMBER_OF_PARTITION_ENTRIES;
+  PrimaryHeader->SizeOfPartitionEntry     = DEFAULT_PRIMARY_TABLE_HEADER_SIZE_OF_PARTITION_ENTRY;
+
+  UpdatePrimaryHeaderCrc (PrimaryHeader);
+}
 
 /**
   This function tests the SanitizeEfiPartitionTableHeader function.
@@ -48,64 +95,70 @@ TestSanitizeEfiPartitionTableHeader (
   EFI_BLOCK_IO_PROTOCOL       BlockIo;
   EFI_BLOCK_IO_MEDIA          BlockMedia;
 
-  // Generate EFI_BLOCK_IO_MEDIA test data
-  BlockMedia.MediaId          = 1;
-  BlockMedia.RemovableMedia   = FALSE;
-  BlockMedia.MediaPresent     = TRUE;
-  BlockMedia.LogicalPartition = FALSE;
-  BlockMedia.ReadOnly         = FALSE;
-  BlockMedia.WriteCaching     = FALSE;
-  BlockMedia.BlockSize        = 512;
-  BlockMedia.IoAlign          = 1;
-  BlockMedia.LastBlock        = 0;
-
-  // Generate EFI_BLOCK_IO_PROTOCOL test data
-  BlockIo.Revision    = 1;
-  BlockIo.Media       = &BlockMedia;
-  BlockIo.Reset       = NULL;
-  BlockIo.ReadBlocks  = NULL;
-  BlockIo.WriteBlocks = NULL;
-  BlockIo.FlushBlocks = NULL;
-
-  // Geneate EFI_PARTITION_TABLE_HEADER test data
-  PrimaryHeader.Header.Signature         = EFI_PTAB_HEADER_ID;
-  PrimaryHeader.Header.Revision          = DEFAULT_PRIMARY_TABLE_HEADER_REVISION;
-  PrimaryHeader.Header.HeaderSize        = sizeof (EFI_PARTITION_TABLE_HEADER);
-  PrimaryHeader.MyLBA                    = 1;
-  PrimaryHeader.PartitionEntryLBA        = 2;
-  PrimaryHeader.AlternateLBA             = 3;
-  PrimaryHeader.FirstUsableLBA           = 4;
-  PrimaryHeader.LastUsableLBA            = 5;
-  PrimaryHeader.NumberOfPartitionEntries = DEFAULT_PRIMARY_TABLE_HEADER_NUMBER_OF_PARTITION_ENTRIES;
-  PrimaryHeader.SizeOfPartitionEntry     = DEFAULT_PRIMARY_TABLE_HEADER_SIZE_OF_PARTITION_ENTRY;
-  PrimaryHeader.PartitionEntryArrayCRC32 = 0; // Purposely invalid
-
-  // Calculate the CRC32 of the PrimaryHeader
-  PrimaryHeader.Header.CRC32 = CalculateCrc32 ((UINT8 *)&PrimaryHeader, PrimaryHeader.Header.HeaderSize);
+  InitValidGptTestContext (&PrimaryHeader, &BlockIo, &BlockMedia);
 
   // Test that a normal PrimaryHeader passes validation
   Status = Tpm2SanitizeEfiPartitionTableHeader (&PrimaryHeader, &BlockIo);
   UT_ASSERT_NOT_EFI_ERROR (Status);
 
+  // Test that a bad header CRC is rejected.
+  PrimaryHeader.Header.CRC32++;
+  Status = Tpm2SanitizeEfiPartitionTableHeader (&PrimaryHeader, &BlockIo);
+  UT_ASSERT_EQUAL (Status, EFI_DEVICE_ERROR);
+  UpdatePrimaryHeaderCrc (&PrimaryHeader);
+
   // Test that when number of partition entries is 0, the function returns EFI_DEVICE_ERROR
-  // Should print "Invalid Partition Table Header NumberOfPartitionEntries!""
   PrimaryHeader.NumberOfPartitionEntries = 0;
+  UpdatePrimaryHeaderCrc (&PrimaryHeader);
   Status                                 = Tpm2SanitizeEfiPartitionTableHeader (&PrimaryHeader, &BlockIo);
   UT_ASSERT_EQUAL (Status, EFI_DEVICE_ERROR);
-  PrimaryHeader.NumberOfPartitionEntries = DEFAULT_PRIMARY_TABLE_HEADER_SIZE_OF_PARTITION_ENTRY;
+  PrimaryHeader.NumberOfPartitionEntries = DEFAULT_PRIMARY_TABLE_HEADER_NUMBER_OF_PARTITION_ENTRIES;
+  UpdatePrimaryHeaderCrc (&PrimaryHeader);
 
   // Test that when the header size is too small, the function returns EFI_DEVICE_ERROR
-  // Should print "Invalid Partition Table Header Size!"
   PrimaryHeader.Header.HeaderSize = 0;
+  UpdatePrimaryHeaderCrc (&PrimaryHeader);
   Status                          = Tpm2SanitizeEfiPartitionTableHeader (&PrimaryHeader, &BlockIo);
   UT_ASSERT_EQUAL (Status, EFI_DEVICE_ERROR);
   PrimaryHeader.Header.HeaderSize = sizeof (EFI_PARTITION_TABLE_HEADER);
+  UpdatePrimaryHeaderCrc (&PrimaryHeader);
 
   // Test that when the SizeOfPartitionEntry is too small, the function returns EFI_DEVICE_ERROR
-  // should print: "SizeOfPartitionEntry shall be set to a value of 128 x 2^n where n is an integer greater than or equal to zero (e.g., 128, 256, 512, etc.)!"
   PrimaryHeader.SizeOfPartitionEntry = 1;
+  UpdatePrimaryHeaderCrc (&PrimaryHeader);
   Status                             = Tpm2SanitizeEfiPartitionTableHeader (&PrimaryHeader, &BlockIo);
   UT_ASSERT_EQUAL (Status, EFI_DEVICE_ERROR);
+
+  DEBUG ((DEBUG_INFO, "%a: Test passed\n", __func__));
+
+  return UNIT_TEST_PASSED;
+}
+
+UNIT_TEST_STATUS
+EFIAPI
+TestValidatePartitionEntryArrayCrc (
+  IN UNIT_TEST_CONTEXT  Context
+  )
+{
+  EFI_STATUS                  Status;
+  EFI_PARTITION_TABLE_HEADER  PrimaryHeader;
+  EFI_BLOCK_IO_PROTOCOL       BlockIo;
+  EFI_BLOCK_IO_MEDIA          BlockMedia;
+  EFI_PARTITION_ENTRY         PartitionEntry;
+
+  InitValidGptTestContext (&PrimaryHeader, &BlockIo, &BlockMedia);
+  ZeroMem (&PartitionEntry, sizeof (PartitionEntry));
+
+  PrimaryHeader.PartitionEntryArrayCRC32 = CalculateCrc32 ((UINT8 *)&PartitionEntry, sizeof (PartitionEntry));
+  Status                                 = GptValidatePartitionEntryArrayCrc (&PrimaryHeader, &PartitionEntry, sizeof (PartitionEntry));
+  UT_ASSERT_NOT_EFI_ERROR (Status);
+
+  PrimaryHeader.PartitionEntryArrayCRC32++;
+  Status = GptValidatePartitionEntryArrayCrc (&PrimaryHeader, &PartitionEntry, sizeof (PartitionEntry));
+  UT_ASSERT_EQUAL (Status, EFI_CRC_ERROR);
+
+  Status = GptValidatePartitionEntryArrayCrc (&PrimaryHeader, &PartitionEntry, sizeof (PartitionEntry) - 1);
+  UT_ASSERT_EQUAL (Status, EFI_BAD_BUFFER_SIZE);
 
   DEBUG ((DEBUG_INFO, "%a: Test passed\n", __func__));
 
@@ -306,6 +359,7 @@ UefiTestMain (
 
   // -----------Suite---------------------------------Description----------------------------Class----------------------------------Test Function------------------------Pre---Clean-Context
   AddTestCase (Tcg2MeasureBootLibValidationTestSuite, "Tests Validating EFI Partition Table", "Common.Tcg2MeasureBootLibValidation", TestSanitizeEfiPartitionTableHeader, NULL, NULL, NULL);
+  AddTestCase (Tcg2MeasureBootLibValidationTestSuite, "Tests Validating EFI Partition Entry Array CRC", "Common.Tcg2MeasureBootLibValidation", TestValidatePartitionEntryArrayCrc, NULL, NULL, NULL);
   AddTestCase (Tcg2MeasureBootLibValidationTestSuite, "Tests Primary header gpt event checks for overflow", "Common.Tcg2MeasureBootLibValidation", TestSanitizePrimaryHeaderAllocationSize, NULL, NULL, NULL);
   AddTestCase (Tcg2MeasureBootLibValidationTestSuite, "Tests Primary header allocation size checks for overflow", "Common.Tcg2MeasureBootLibValidation", TestSanitizePrimaryHeaderGptEventSize, NULL, NULL, NULL);
   AddTestCase (Tcg2MeasureBootLibValidationTestSuite, "Tests PE Image and FileSize checks for overflow", "Common.Tcg2MeasureBootLibValidation", TestSanitizePeImageEventSize, NULL, NULL, NULL);

@@ -30,10 +30,9 @@
 #include <IndustryStandard/UefiTcgPlatform.h>
 #include <Protocol/BlockIo.h>
 #include <Library/MemoryAllocationLib.h>
+#include <Library/GptValidationLib.h>
 
 #include "DxeTpm2MeasureBootLibSanitization.h"
-
-#define GPT_HEADER_REVISION_V1  0x00010000
 
 /**
   This function will validate the EFI_PARTITION_TABLE_HEADER structure is safe to parse
@@ -64,10 +63,12 @@
 EFI_STATUS
 EFIAPI
 Tpm2SanitizeEfiPartitionTableHeader (
-  IN CONST EFI_PARTITION_TABLE_HEADER  *PrimaryHeader,
+  IN OUT EFI_PARTITION_TABLE_HEADER  *PrimaryHeader,
   IN CONST EFI_BLOCK_IO_PROTOCOL       *BlockIo
   )
 {
+  UINT64  PartitionEntryArraySize;
+
   //
   // Verify that the input parameters are safe to use
   //
@@ -81,73 +82,12 @@ Tpm2SanitizeEfiPartitionTableHeader (
     return EFI_INVALID_PARAMETER;
   }
 
-  //
-  // The signature must be EFI_PTAB_HEADER_ID ("EFI PART" in ASCII)
-  //
-  if (PrimaryHeader->Header.Signature != EFI_PTAB_HEADER_ID) {
-    DEBUG ((DEBUG_ERROR, "Invalid Partition Table Header!\n"));
-    return EFI_DEVICE_ERROR;
-  }
-
-  //
-  // The version must be GPT_HEADER_REVISION_V1 (0x00010000)
-  //
-  if (PrimaryHeader->Header.Revision != GPT_HEADER_REVISION_V1) {
-    DEBUG ((DEBUG_ERROR, "Invalid Partition Table Header Revision!\n"));
-    return EFI_DEVICE_ERROR;
-  }
-
-  //
-  // The HeaderSize must be greater than or equal to 92 and must be less than or equal to the logical block size
-  //
-  if ((PrimaryHeader->Header.HeaderSize < sizeof (EFI_PARTITION_TABLE_HEADER)) || (PrimaryHeader->Header.HeaderSize > BlockIo->Media->BlockSize)) {
-    DEBUG ((DEBUG_ERROR, "Invalid Partition Table Header HeaderSize!\n"));
-    return EFI_DEVICE_ERROR;
-  }
-
-  //
-  // The partition entries should all be before the first usable block
-  //
-  if (PrimaryHeader->FirstUsableLBA <= PrimaryHeader->PartitionEntryLBA) {
-    DEBUG ((DEBUG_ERROR, "GPT PartitionEntryLBA is not less than FirstUsableLBA!\n"));
-    return EFI_DEVICE_ERROR;
-  }
-
-  //
-  // Check that the PartitionEntryLBA greater than the Max LBA
-  // This will be used later for multiplication
-  //
-  if (PrimaryHeader->PartitionEntryLBA > DivU64x32 (MAX_UINT64, BlockIo->Media->BlockSize)) {
-    DEBUG ((DEBUG_ERROR, "Invalid Partition Table Header PartitionEntryLBA!\n"));
-    return EFI_DEVICE_ERROR;
-  }
-
-  //
-  // Check that the number of partition entries is greater than zero
-  //
-  if (PrimaryHeader->NumberOfPartitionEntries == 0) {
-    DEBUG ((DEBUG_ERROR, "Invalid Partition Table Header NumberOfPartitionEntries!\n"));
-    return EFI_DEVICE_ERROR;
-  }
-
-  //
-  // SizeOfPartitionEntry must be 128, 256, 512... improper size may lead to accessing uninitialized memory
-  //
-  if ((PrimaryHeader->SizeOfPartitionEntry < 128) || ((PrimaryHeader->SizeOfPartitionEntry & (PrimaryHeader->SizeOfPartitionEntry - 1)) != 0)) {
-    DEBUG ((DEBUG_ERROR, "SizeOfPartitionEntry shall be set to a value of 128 x 2^n where n is an integer greater than or equal to zero (e.g., 128, 256, 512, etc.)!\n"));
-    return EFI_DEVICE_ERROR;
-  }
-
-  //
-  // This check is to prevent overflow when calculating the allocation size for the partition entries
-  // This check will be used later for multiplication
-  //
-  if (PrimaryHeader->NumberOfPartitionEntries > DivU64x32 (MAX_UINT64, PrimaryHeader->SizeOfPartitionEntry)) {
-    DEBUG ((DEBUG_ERROR, "Invalid Partition Table Header NumberOfPartitionEntries!\n"));
-    return EFI_DEVICE_ERROR;
-  }
-
-  return EFI_SUCCESS;
+  return GptValidateHeader (
+           PrimaryHeader,
+           BlockIo->Media,
+           PRIMARY_PART_HEADER_LBA,
+           &PartitionEntryArraySize
+           );
 }
 
 /**
@@ -175,6 +115,7 @@ Tpm2SanitizePrimaryHeaderAllocationSize (
   )
 {
   EFI_STATUS  Status;
+  UINT64      EntryArraySize;
 
   if (PrimaryHeader == NULL) {
     return EFI_INVALID_PARAMETER;
@@ -184,16 +125,18 @@ Tpm2SanitizePrimaryHeaderAllocationSize (
     return EFI_INVALID_PARAMETER;
   }
 
-  //
-  // Replacing logic:
-  // PrimaryHeader->NumberOfPartitionEntries * PrimaryHeader->SizeOfPartitionEntry;
-  //
-  Status = SafeUint32Mult (PrimaryHeader->NumberOfPartitionEntries, PrimaryHeader->SizeOfPartitionEntry, AllocationSize);
+  Status = GptGetPartitionEntryArraySize (PrimaryHeader, &EntryArraySize);
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "Allocation Size would have overflowed!\n"));
     return EFI_BAD_BUFFER_SIZE;
   }
 
+  if (EntryArraySize > MAX_UINT32) {
+    DEBUG ((DEBUG_ERROR, "Allocation Size would have overflowed!\n"));
+    return EFI_BAD_BUFFER_SIZE;
+  }
+
+  *AllocationSize = (UINT32)EntryArraySize;
   return EFI_SUCCESS;
 }
 

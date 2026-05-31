@@ -21,6 +21,8 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 #include "Partition.h"
 
+#include <Library/GptValidationLib.h>
+
 /**
   Install child handles if the Handle supports GPT partition structure.
 
@@ -296,10 +298,13 @@ PartitionInstallGptChildHandles (
       DEBUG ((DEBUG_INFO, " Restore primary partition table by the backup\n"));
       if (!PartitionRestoreGptTable (BlockIo, DiskIo, BackupHeader)) {
         DEBUG ((DEBUG_INFO, " Restore primary partition table error\n"));
+        goto Done;
       }
 
       if (PartitionValidGptTable (BlockIo, DiskIo, BackupHeader->AlternateLBA, PrimaryHeader)) {
-        DEBUG ((DEBUG_INFO, " Restore backup partition table success\n"));
+        DEBUG ((DEBUG_INFO, " Restore primary partition table success\n"));
+      } else {
+        goto Done;
       }
     }
   } else if (!PartitionValidGptTable (BlockIo, DiskIo, PrimaryHeader->AlternateLBA, BackupHeader)) {
@@ -307,10 +312,13 @@ PartitionInstallGptChildHandles (
     DEBUG ((DEBUG_INFO, " Restore backup partition table by the primary\n"));
     if (!PartitionRestoreGptTable (BlockIo, DiskIo, PrimaryHeader)) {
       DEBUG ((DEBUG_INFO, " Restore backup partition table error\n"));
+      goto Done;
     }
 
     if (PartitionValidGptTable (BlockIo, DiskIo, PrimaryHeader->AlternateLBA, BackupHeader)) {
       DEBUG ((DEBUG_INFO, " Restore backup partition table success\n"));
+    } else {
+      goto Done;
     }
   }
 
@@ -474,6 +482,7 @@ PartitionValidGptTable (
   EFI_STATUS                  Status;
   UINT32                      BlockSize;
   EFI_PARTITION_TABLE_HEADER  *PartHdr;
+  UINT64                      EntryArraySize;
   UINT32                      MediaId;
 
   BlockSize = BlockIo->Media->BlockSize;
@@ -500,21 +509,9 @@ PartitionValidGptTable (
     return FALSE;
   }
 
-  if ((PartHdr->Header.Signature != EFI_PTAB_HEADER_ID) ||
-      !PartitionCheckCrc (BlockSize, &PartHdr->Header) ||
-      (PartHdr->MyLBA != Lba) ||
-      (PartHdr->SizeOfPartitionEntry < sizeof (EFI_PARTITION_ENTRY))
-      )
-  {
+  Status = GptValidateHeader (PartHdr, BlockIo->Media, Lba, &EntryArraySize);
+  if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_INFO, "Invalid efi partition table header\n"));
-    FreePool (PartHdr);
-    return FALSE;
-  }
-
-  //
-  // Ensure the NumberOfPartitionEntries * SizeOfPartitionEntry doesn't overflow.
-  //
-  if (PartHdr->NumberOfPartitionEntries > DivU64x32 (MAX_UINTN, PartHdr->SizeOfPartitionEntry)) {
     FreePool (PartHdr);
     return FALSE;
   }
@@ -551,13 +548,21 @@ PartitionCheckGptEntryArrayCRC (
 {
   EFI_STATUS  Status;
   UINT8       *Ptr;
-  UINT32      Crc;
-  UINTN       Size;
+  UINT64      Size;
+
+  Status = GptGetPartitionEntryArraySize (PartHeader, &Size);
+  if (EFI_ERROR (Status)) {
+    return FALSE;
+  }
+
+  if (Size > MAX_UINTN) {
+    return FALSE;
+  }
 
   //
   // Read the EFI Partition Entries
   //
-  Ptr = AllocatePool (PartHeader->NumberOfPartitionEntries * PartHeader->SizeOfPartitionEntry);
+  Ptr = AllocatePool ((UINTN)Size);
   if (Ptr == NULL) {
     DEBUG ((DEBUG_ERROR, " Allocate pool error\n"));
     return FALSE;
@@ -567,7 +572,7 @@ PartitionCheckGptEntryArrayCRC (
                      DiskIo,
                      BlockIo->Media->MediaId,
                      MultU64x32 (PartHeader->PartitionEntryLBA, BlockIo->Media->BlockSize),
-                     PartHeader->NumberOfPartitionEntries * PartHeader->SizeOfPartitionEntry,
+                     (UINTN)Size,
                      Ptr
                      );
   if (EFI_ERROR (Status)) {
@@ -575,18 +580,11 @@ PartitionCheckGptEntryArrayCRC (
     return FALSE;
   }
 
-  Size = PartHeader->NumberOfPartitionEntries * PartHeader->SizeOfPartitionEntry;
-
-  Status = gBS->CalculateCrc32 (Ptr, Size, &Crc);
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "CheckPEntryArrayCRC: Crc calculation failed\n"));
-    FreePool (Ptr);
-    return FALSE;
-  }
+  Status = GptValidatePartitionEntryArrayCrc (PartHeader, Ptr, (UINTN)Size);
 
   FreePool (Ptr);
 
-  return (BOOLEAN)(PartHeader->PartitionEntryArrayCRC32 == Crc);
+  return (BOOLEAN)!EFI_ERROR (Status);
 }
 
 /**

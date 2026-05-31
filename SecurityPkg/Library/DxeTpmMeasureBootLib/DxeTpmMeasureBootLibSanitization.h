@@ -53,8 +53,8 @@
 EFI_STATUS
 EFIAPI
 TpmSanitizeEfiPartitionTableHeader (
-  IN CONST EFI_PARTITION_TABLE_HEADER  *PrimaryHeader,
-  IN CONST EFI_BLOCK_IO_PROTOCOL       *BlockIo
+  IN OUT EFI_PARTITION_TABLE_HEADER  *PrimaryHeader,
+  IN CONST EFI_BLOCK_IO_PROTOCOL     *BlockIo
   );
 
 /**
