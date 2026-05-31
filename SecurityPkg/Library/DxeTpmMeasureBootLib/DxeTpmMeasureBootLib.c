@@ -209,17 +209,9 @@ TcgMeasureGptTable (
   }
 
   //
-  // Count the valid partition
+  // Count all partition entries described by the GPT header
   //
-  PartitionEntry    = (EFI_PARTITION_ENTRY *)EntryPtr;
-  NumberOfPartition = 0;
-  for (Index = 0; Index < PrimaryHeader->NumberOfPartitionEntries; Index++) {
-    if (!IsZeroGuid (&PartitionEntry->PartitionTypeGUID)) {
-      NumberOfPartition++;
-    }
-
-    PartitionEntry = (EFI_PARTITION_ENTRY *)((UINT8 *)PartitionEntry + PrimaryHeader->SizeOfPartitionEntry);
-  }
+  NumberOfPartition = PrimaryHeader->NumberOfPartitionEntries;
 
   //
   // Prepare Data for Measurement
@@ -238,27 +230,14 @@ TcgMeasureGptTable (
   GptData             = (EFI_GPT_DATA *)TcgEvent->Event;
 
   //
-  // Copy the EFI_PARTITION_TABLE_HEADER and NumberOfPartition
+  // Copy the EFI_PARTITION_TABLE_HEADER and complete partition entry array
   //
   CopyMem ((UINT8 *)GptData, (UINT8 *)PrimaryHeader, sizeof (EFI_PARTITION_TABLE_HEADER));
   GptData->NumberOfPartitions = NumberOfPartition;
   //
-  // Copy the valid partition entry
+  // Copy the complete partition entry array
   //
-  PartitionEntry    = (EFI_PARTITION_ENTRY *)EntryPtr;
-  NumberOfPartition = 0;
-  for (Index = 0; Index < PrimaryHeader->NumberOfPartitionEntries; Index++) {
-    if (!IsZeroGuid (&PartitionEntry->PartitionTypeGUID)) {
-      CopyMem (
-        (UINT8 *)&GptData->Partitions + NumberOfPartition * PrimaryHeader->SizeOfPartitionEntry,
-        (UINT8 *)PartitionEntry,
-        PrimaryHeader->SizeOfPartitionEntry
-        );
-      NumberOfPartition++;
-    }
-
-    PartitionEntry = (EFI_PARTITION_ENTRY *)((UINT8 *)PartitionEntry + PrimaryHeader->SizeOfPartitionEntry);
-  }
+  CopyMem ((UINT8 *)&GptData->Partitions, EntryPtr, AllocSize);
 
   //
   // Measure the GPT data
