@@ -181,6 +181,9 @@ GetMemoryMapPolicy (
   MEMMAP_ENTRY           MemoryMapEntry;
   MEMMAP_ENTRY           *StartEntry;
   MEMMAP_ENTRY           *pEntry;
+  UINT64                 BaseAddress;
+  UINT64                 Length;
+  UINT64                 GuardSize;
   UINTN                  Processed;
   EFI_MEMORY_DESCRIPTOR  *VirtualMemoryTable;
   UINTN                  Index = 0;
@@ -223,9 +226,31 @@ GetMemoryMapPolicy (
     }
 
     DEBUG ((DEBUG_INFO, "MemmapEntry Base %p length %p  type %d\n", pEntry->BaseAddr, pEntry->Length, pEntry->Type));
-    VirtualMemoryTable[Index].PhysicalStart = pEntry->BaseAddr;
+    BaseAddress = pEntry->BaseAddr;
+    Length      = pEntry->Length;
+
+    //
+    // When NULL pointer detection is enabled for UEFI code, leave the first
+    // page unmapped so a real load from VA 0x0 raises a CPU exception instead
+    // of silently reading RAM.  The allocation HOB in InitializeRamRegions()
+    // only prevents page 0 from being allocated; it does not affect the MMU
+    // identity mapping created here.
+    //
+    if (((PcdGet8 (PcdNullPointerDetectionPropertyMask) & BIT0) != 0) &&
+        (BaseAddress < EFI_PAGE_SIZE))
+    {
+      GuardSize = EFI_PAGE_SIZE - BaseAddress;
+      if (Length <= GuardSize) {
+        continue;
+      }
+
+      BaseAddress += GuardSize;
+      Length      -= GuardSize;
+    }
+
+    VirtualMemoryTable[Index].PhysicalStart = BaseAddress;
     VirtualMemoryTable[Index].VirtualStart  = VirtualMemoryTable[Index].PhysicalStart;
-    VirtualMemoryTable[Index].NumberOfPages = EFI_SIZE_TO_PAGES (pEntry->Length);
+    VirtualMemoryTable[Index].NumberOfPages = EFI_SIZE_TO_PAGES (Length);
     VirtualMemoryTable[Index].Attribute     = EFI_MEMORY_WB;
     ++Index;
   }
