@@ -1,0 +1,33 @@
+## @file
+#  LoongArch64 MADT Table Generator
+#
+#  Copyright (c) 2026, MarsDoge. All rights reserved.<BR>
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+##
+
+[Defines]
+  INF_VERSION    = 0x00010019
+  BASE_NAME      = AcpiMadtLibLoongArch64
+  FILE_GUID      = D8D13378-1230-4D1A-9E46-3818F4A43F73
+  VERSION_STRING = 1.0
+  MODULE_TYPE    = DXE_DRIVER
+  LIBRARY_CLASS  = NULL|DXE_DRIVER
+  CONSTRUCTOR    = AcpiMadtLibConstructor
+  DESTRUCTOR     = AcpiMadtLibDestructor
+
+[Sources]
+  MadtGenerator.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  DynamicTablesPkg/DynamicTablesPkg.dec
+
+[LibraryClasses]
+  AcpiHelperLib
+  BaseLib
+  BaseMemoryLib
+  DebugLib
+  MemoryAllocationLib
+  TableHelperLib

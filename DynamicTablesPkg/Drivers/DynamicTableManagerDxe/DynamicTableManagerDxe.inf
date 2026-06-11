@@ -38,6 +38,9 @@
 [Sources.RISCV64]
   RiscV/RiscVDynamicTableManagerDxe.c
 
+[Sources.LOONGARCH64]
+  LoongArch64/LoongArch64DynamicTableManagerDxe.c
+
 [Packages]
   MdePkg/MdePkg.dec
   MdeModulePkg/MdeModulePkg.dec

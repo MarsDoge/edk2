@@ -15,6 +15,7 @@
 
 #include <ArchCommonNameSpaceObjects.h>
 #include <ArmNameSpaceObjects.h>
+#include <LoongArchNameSpaceObjects.h>
 #include <RiscVNameSpaceObjects.h>
 #include <StandardNameSpaceObjects.h>
 #include <X64NameSpaceObjects.h>
@@ -37,6 +38,7 @@ Bits: [31:28] - Name Space ID
                 0010 - ARM
                 0011 - X64
                 0100 - RISC-V
+                0101 - LoongArch
                 1111 - Custom/OEM
                 All other values are reserved.
 
@@ -90,6 +92,7 @@ typedef enum ObjectNameSpaceID {
   EObjNameSpaceArm,               ///< ARM Objects Namespace
   EObjNameSpaceX64,               ///< X64 Objects Namespace
   EObjNameSpaceRiscV,             ///< RISC-V Objects Namespace
+  EObjNameSpaceLoongArch,         ///< LoongArch Objects Namespace
   EObjNameSpaceOem = 0xF,         ///< OEM Objects Namespace
   EObjNameSpaceMax,
 } EOBJECT_NAMESPACE_ID;
@@ -174,6 +177,16 @@ typedef struct CmObjDescriptor {
 **/
 #define CREATE_CM_RISCV_OBJECT_ID(ObjectId) \
           (CREATE_CM_OBJECT_ID (EObjNameSpaceRiscV, ObjectId))
+
+/** This macro returns a Configuration Manager Object ID
+    in the LoongArch Object Namespace.
+
+  @param [in] ObjectId    The Object ID.
+
+  @retval Returns a LoongArch Configuration Manager Object ID.
+**/
+#define CREATE_CM_LOONGARCH_OBJECT_ID(ObjectId) \
+          (CREATE_CM_OBJECT_ID (EObjNameSpaceLoongArch, ObjectId))
 
 /** This macro returns a Configuration Manager Object ID
     in the Arch Common Object Namespace.

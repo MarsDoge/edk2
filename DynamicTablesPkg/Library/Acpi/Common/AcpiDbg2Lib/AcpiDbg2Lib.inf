@@ -30,6 +30,9 @@
 [Sources.RISCV64]
   RiscV/RiscVDbg2Generator.c
 
+[Sources.LOONGARCH64]
+  LoongArch64/LoongArch64Dbg2Generator.c
+
 [Packages.ARM, Packages.AARCH64]
   ArmPlatformPkg/ArmPlatformPkg.dec
 

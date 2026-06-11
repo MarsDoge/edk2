@@ -30,6 +30,9 @@
 [Sources.RISCV64]
   RiscV/RiscVSsdtCpuTopologyGenerator.c
 
+[Sources.LOONGARCH64]
+  LoongArch64/LoongArch64SsdtCpuTopologyGenerator.c
+
 [Packages.AARCH64]
   ArmPlatformPkg/ArmPlatformPkg.dec
 
