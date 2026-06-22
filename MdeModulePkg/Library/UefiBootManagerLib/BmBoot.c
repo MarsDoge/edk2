@@ -1935,23 +1935,24 @@ EfiBootManagerBoot (
     }
 
     if (EFI_ERROR (Status)) {
-      DEBUG ((DEBUG_ERROR, "[Bds] Failed to create Boot#### for a temporary boot - %r!\n", Status));
-      BootOption->Status = Status;
-      return;
+      DEBUG ((DEBUG_WARN, "[Bds] Failed to create Boot#### for a temporary boot - %r!\n", Status));
+      DEBUG ((DEBUG_WARN, "[Bds] Continue to boot the unassigned boot option directly.\n"));
     }
   }
 
   //
-  // 2. Set BootCurrent
+  // 2. Set BootCurrent when the boot option has an assigned option number.
   //
-  Uint16 = (UINT16)OptionNumber;
-  BmSetVariableAndReportStatusCodeOnError (
-    L"BootCurrent",
-    &gEfiGlobalVariableGuid,
-    EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS,
-    sizeof (UINT16),
-    &Uint16
-    );
+  if (OptionNumber != LoadOptionNumberUnassigned) {
+    Uint16 = (UINT16)OptionNumber;
+    BmSetVariableAndReportStatusCodeOnError (
+      L"BootCurrent",
+      &gEfiGlobalVariableGuid,
+      EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS,
+      sizeof (UINT16),
+      &Uint16
+      );
+  }
 
   //
   // 3. Signal the EVT_SIGNAL_READY_TO_BOOT event when we are about to load and execute
@@ -2429,6 +2430,78 @@ BmEnumerateBootOptions (
 
   BmMakeBootOptionDescriptionUnique (BootOptions, *BootOptionCount);
   return BootOptions;
+}
+
+/**
+  Returns persistent boot options followed by current-session transient boot
+  options that do not have matching Boot#### variables.
+
+  @param BootOptionCount   Return the boot option count.
+
+  @retval   Pointer to the boot option array.
+**/
+EFI_BOOT_MANAGER_LOAD_OPTION *
+EFIAPI
+EfiBootManagerGetBootOptionsWithTransient (
+  OUT UINTN  *BootOptionCount
+  )
+{
+  EFI_BOOT_MANAGER_LOAD_OPTION  *BootOptions;
+  UINTN                         BootCount;
+  EFI_BOOT_MANAGER_LOAD_OPTION  *TransientOptions;
+  UINTN                         TransientCount;
+  EFI_BOOT_MANAGER_LOAD_OPTION  *MergedOptions;
+  UINTN                         MergedCount;
+  UINTN                         Index;
+
+  ASSERT (BootOptionCount != NULL);
+
+  *BootOptionCount = 0;
+  BootOptions      = EfiBootManagerGetLoadOptions (&BootCount, LoadOptionTypeBoot);
+  TransientOptions = BmEnumerateBootOptions (&TransientCount);
+
+  if ((BootCount == 0) && (TransientCount == 0)) {
+    return NULL;
+  }
+
+  MergedOptions = AllocateZeroPool ((BootCount + TransientCount) * sizeof (EFI_BOOT_MANAGER_LOAD_OPTION));
+  if (MergedOptions == NULL) {
+    EfiBootManagerFreeLoadOptions (BootOptions, BootCount);
+    EfiBootManagerFreeLoadOptions (TransientOptions, TransientCount);
+    return NULL;
+  }
+
+  MergedCount = 0;
+  if (BootCount != 0) {
+    CopyMem (&MergedOptions[MergedCount], BootOptions, BootCount * sizeof (EFI_BOOT_MANAGER_LOAD_OPTION));
+    MergedCount += BootCount;
+  }
+
+  for (Index = 0; Index < TransientCount; Index++) {
+    if (EfiBootManagerFindLoadOption (&TransientOptions[Index], BootOptions, BootCount) == -1) {
+      CopyMem (&MergedOptions[MergedCount++], &TransientOptions[Index], sizeof (EFI_BOOT_MANAGER_LOAD_OPTION));
+    } else {
+      EfiBootManagerFreeLoadOption (&TransientOptions[Index]);
+    }
+  }
+
+  if (BootOptions != NULL) {
+    FreePool (BootOptions);
+  }
+
+  if (TransientOptions != NULL) {
+    FreePool (TransientOptions);
+  }
+
+  if (MergedCount == 0) {
+    FreePool (MergedOptions);
+    return NULL;
+  }
+
+  BmMakeBootOptionDescriptionUnique (MergedOptions, MergedCount);
+
+  *BootOptionCount = MergedCount;
+  return MergedOptions;
 }
 
 /**

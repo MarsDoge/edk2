@@ -1033,7 +1033,7 @@ BootManagerMenuEntry (
   EfiBootManagerConnectAll ();
   EfiBootManagerRefreshAllBootOption ();
 
-  BootOption = EfiBootManagerGetLoadOptions (&BootOptionCount, LoadOptionTypeBoot);
+  BootOption = EfiBootManagerGetBootOptionsWithTransient (&BootOptionCount);
 
   if (!mModeInitialized) {
     //

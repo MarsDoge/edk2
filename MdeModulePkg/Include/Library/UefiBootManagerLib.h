@@ -76,6 +76,28 @@ EfiBootManagerGetLoadOptions (
   );
 
 /**
+  Returns an array of boot options that contains the persistent Boot#### options
+  referenced by BootOrder, followed by current-session bootable devices that do
+  not have matching persistent Boot#### options.
+
+  The current-session entries are returned with OptionNumber set to
+  LoadOptionNumberUnassigned. They are intended for boot manager UI consumers
+  that want to present bootable devices even when persisting an auto-created
+  Boot#### option fails.
+
+  @param  BootOptionCount   Returns number of entries in the array.
+
+  @retval NULL  No boot options exist.
+  @retval !NULL Array of boot option entries.
+
+**/
+EFI_BOOT_MANAGER_LOAD_OPTION *
+EFIAPI
+EfiBootManagerGetBootOptionsWithTransient (
+  OUT UINTN  *BootOptionCount
+  );
+
+/**
   Free an array of load options returned from EfiBootManagerGetLoadOptions().
 
   @param  LoadOptions      Pointer to the array of load options to free.
