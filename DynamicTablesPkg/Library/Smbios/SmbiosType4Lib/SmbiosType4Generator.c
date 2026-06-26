@@ -460,6 +460,9 @@ BuildSmbiosType4TableEx (
     SmbiosRecord->ProcessorId.SipId        = (ProcHierarchyNodeList[Index].ProcessorId >> 16) & 0xff;
     SmbiosRecord->ProcessorId.SipBankIndex = (ProcHierarchyNodeList[Index].ProcessorId >> 24) & 0xff;
     SmbiosRecord->ProcessorId.SocRevision  = ProcHierarchyNodeList[Index].ProcessorId >> 32;
+ #elif defined (MDE_CPU_LOONGARCH64)
+    SmbiosRecord->ProcessorFamily  = ProcessorFamilyIndicatorFamily2;
+    SmbiosRecord->ProcessorFamily2 = ProcessorFamilyLoongArch;
  #else
     DEBUG ((DEBUG_ERROR, "SmbiosType4Generator needs extending for your CPU\n"));
  #endif
@@ -468,7 +471,7 @@ BuildSmbiosType4TableEx (
     StatusData->Bits.SocketPopulated = 1;
 
     CharacteristicFlags = (PROCESSOR_CHARACTERISTIC_FLAGS *)&SmbiosRecord->ProcessorCharacteristics;
- #if defined (MDE_CPU_AARCH64)
+ #if defined (MDE_CPU_AARCH64) || defined (MDE_CPU_LOONGARCH64)
     CharacteristicFlags->Processor64BitCapable = 1;
  #endif
     CharacteristicFlags->ProcessorMultiCore      = (CpuCount > 1) ? 1 : 0;
