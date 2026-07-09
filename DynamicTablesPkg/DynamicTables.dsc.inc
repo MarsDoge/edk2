@@ -31,9 +31,9 @@
 [LibraryClasses.AARCH64]
   DynamicTablesScmiInfoLib|DynamicTablesPkg/Library/DynamicTablesScmiInfoLib/DynamicTablesScmiInfoLib.inf
 
-[Components.ARM, Components.AARCH64, Components.X64, Components.RISCV64]
+[Components.ARM, Components.AARCH64, Components.X64, Components.RISCV64, Components.LOONGARCH64]
   #
-  # Generators (Common)
+  # ACPI Generators (Common)
   #
   DynamicTablesPkg/Library/Acpi/Common/AcpiCedtLib/AcpiCedtLib.inf
   DynamicTablesPkg/Library/Acpi/Common/AcpiDbg2Lib/AcpiDbg2Lib.inf
@@ -50,6 +50,23 @@
   DynamicTablesPkg/Library/Acpi/Common/AcpiSpmiLib/AcpiSpmiLib.inf
   DynamicTablesPkg/Library/Acpi/Common/AcpiHestLib/AcpiHestLib.inf
   DynamicTablesPkg/Library/Acpi/Common/AcpiEinjLib/AcpiEinjLib.inf
+
+  #
+  # SMBIOS Generators (Common)
+  #
+  DynamicTablesPkg/Library/Smbios/SmbiosType0Lib/SmbiosType0Lib.inf
+  DynamicTablesPkg/Library/Smbios/SmbiosType4Lib/SmbiosType4Lib.inf
+  DynamicTablesPkg/Library/Smbios/SmbiosType7Lib/SmbiosType7Lib.inf
+  DynamicTablesPkg/Library/Smbios/SmbiosType16Lib/SmbiosType16Lib.inf
+  DynamicTablesPkg/Library/Smbios/SmbiosType17Lib/SmbiosType17Lib.inf
+  DynamicTablesPkg/Library/Smbios/SmbiosType19Lib/SmbiosType19Lib.inf
+  DynamicTablesPkg/Library/Smbios/SmbiosType20Lib/SmbiosType20Lib.inf
+  DynamicTablesPkg/Library/Smbios/SmbiosType23Lib/SmbiosType23Lib.inf
+  DynamicTablesPkg/Library/Smbios/SmbiosType26Lib/SmbiosType26Lib.inf
+  DynamicTablesPkg/Library/Smbios/SmbiosType27Lib/SmbiosType27Lib.inf
+  DynamicTablesPkg/Library/Smbios/SmbiosType28Lib/SmbiosType28Lib.inf
+  DynamicTablesPkg/Library/Smbios/SmbiosType29Lib/SmbiosType29Lib.inf
+  DynamicTablesPkg/Library/Smbios/SmbiosType37Lib/SmbiosType37Lib.inf
 
   # AML Fixup (Common)
   DynamicTablesPkg/Library/Acpi/Common/AcpiSsdtSerialPortLib/SsdtSerialPortLib.inf
@@ -215,4 +232,27 @@
       NULL|DynamicTablesPkg/Library/Acpi/Common/AcpiSsdtCpuTopologyLib/SsdtCpuTopologyLib.inf
       NULL|DynamicTablesPkg/Library/Acpi/Common/AcpiSsdtPcieLib/SsdtPcieLib.inf
       NULL|DynamicTablesPkg/Library/Acpi/RiscV/AcpiSsdtPlicAplicLib/AcpiSsdtPlicAplicLib.inf
+  }
+
+[Components.LOONGARCH64]
+  #
+  # Dynamic Table Factory Dxe
+  #
+  DynamicTablesPkg/Drivers/DynamicTableFactoryDxe/DynamicTableFactoryDxe.inf {
+    <LibraryClasses>
+      # Generators
+      #   Common ACPI
+      NULL|DynamicTablesPkg/Library/Acpi/Common/AcpiMcfgLib/AcpiMcfgLib.inf
+      NULL|DynamicTablesPkg/Library/Acpi/Common/AcpiPcctLib/AcpiPcctLib.inf
+      NULL|DynamicTablesPkg/Library/Acpi/Common/AcpiPpttLib/AcpiPpttLib.inf
+      NULL|DynamicTablesPkg/Library/Acpi/Common/AcpiRawLib/AcpiRawLib.inf
+      NULL|DynamicTablesPkg/Library/Acpi/Common/AcpiSlitLib/AcpiSlitLib.inf
+
+      #   Common SMBIOS
+      NULL|DynamicTablesPkg/Library/Smbios/SmbiosType0Lib/SmbiosType0Lib.inf
+      NULL|DynamicTablesPkg/Library/Smbios/SmbiosType4Lib/SmbiosType4Lib.inf
+      NULL|DynamicTablesPkg/Library/Smbios/SmbiosType7Lib/SmbiosType7Lib.inf
+      NULL|DynamicTablesPkg/Library/Smbios/SmbiosType16Lib/SmbiosType16Lib.inf
+      NULL|DynamicTablesPkg/Library/Smbios/SmbiosType17Lib/SmbiosType17Lib.inf
+      NULL|DynamicTablesPkg/Library/Smbios/SmbiosType19Lib/SmbiosType19Lib.inf
   }
