@@ -60,6 +60,12 @@
 [Components.AARCH64]
   DynamicTablesPkg/Library/DynamicTablesScmiInfoLib/DynamicTablesScmiInfoLib.inf
 
+[Components.LOONGARCH64]
+  #
+  # Platform integration example (package build only)
+  #
+  DynamicTablesPkg/Example/LoongArch64/ConfigurationManagerDxe/ConfigurationManagerDxe.inf
+
 [BuildOptions]
   *_*_*_CC_FLAGS = -D DISABLE_NEW_DEPRECATED_INTERFACES
 
