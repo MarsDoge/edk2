@@ -482,7 +482,7 @@ STATIC CONST ACPI_PARSER  LpcPic[] = {
   { L"Version",        1, 2,  L"0x%x",  NULL, NULL, NULL, NULL },
   { L"Base Address",   8, 3,  L"0x%lx", NULL, NULL, NULL, NULL },
   { L"Size",           2, 11, L"0x%x",  NULL, NULL, NULL, NULL },
-  { L"Cascade vector", 2, 13, L"0x%x",  NULL, NULL, NULL, NULL }
+  { L"Cascade vector", 1, 13, L"0x%x",  NULL, NULL, NULL, NULL }
 };
 
 /**
