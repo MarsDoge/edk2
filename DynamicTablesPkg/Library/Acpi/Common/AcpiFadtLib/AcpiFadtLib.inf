@@ -30,6 +30,9 @@
 [Sources.RISCV64]
   RiscV/RiscVFadtGenerator.c
 
+[Sources.LOONGARCH64]
+  LoongArch64/LoongArch64FadtGenerator.c
+
 [Packages]
   MdePkg/MdePkg.dec
   MdeModulePkg/MdeModulePkg.dec
