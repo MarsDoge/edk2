@@ -30,6 +30,7 @@
   # Defines for default states.  These can be changed on the command line.
   # -D FLAG=VALUE
   DEFINE TTY_TERMINAL            = FALSE
+  DEFINE LZMA_LOONGARCH_BCJ      = FALSE
   DEFINE SECURE_BOOT_ENABLE      = FALSE
   DEFINE TPM2_ENABLE             = FALSE
   DEFINE TPM2_CONFIG_ENABLE      = FALSE
@@ -465,7 +466,11 @@
   MdePkg/Library/PeiExtractGuidedSectionLib/PeiExtractGuidedSectionLib.inf
   MdeModulePkg/Core/DxeIplPeim/DxeIpl.inf {
     <LibraryClasses>
+!if $(LZMA_LOONGARCH_BCJ) == TRUE
+      NULL|MdeModulePkg/Library/LzmaCustomDecompressLib/LzmaLoongArchCustomDecompressLib.inf
+!else
       NULL|MdeModulePkg/Library/LzmaCustomDecompressLib/LzmaCustomDecompressLib.inf
+!endif
   }
 
   OvmfPkg/LoongArchVirt/PlatformPei/PlatformPei.inf {
@@ -478,7 +483,11 @@
   #
   MdeModulePkg/Core/Dxe/DxeMain.inf {
     <LibraryClasses>
+!if $(LZMA_LOONGARCH_BCJ) == TRUE
+      NULL                             | MdeModulePkg/Library/LzmaCustomDecompressLib/LzmaLoongArchCustomDecompressLib.inf
+!else
       NULL                             | MdeModulePkg/Library/LzmaCustomDecompressLib/LzmaCustomDecompressLib.inf
+!endif
       DevicePathLib                    | MdePkg/Library/UefiDevicePathLib/UefiDevicePathLib.inf
       ExtractGuidedSectionLib          | MdePkg/Library/DxeExtractGuidedSectionLib/DxeExtractGuidedSectionLib.inf
   }

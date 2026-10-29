@@ -20,13 +20,17 @@ OBJECTS = \
   $(SDK_C)\LzmaEnc.obj \
   $(SDK_C)\7zFile.obj \
   $(SDK_C)\7zStream.obj \
+  $(SDK_C)\BraLoongArch.obj \
   $(SDK_C)\Bra86.obj \
   $(SDK_C)\LzFindMt.obj \
   $(SDK_C)\Threads.obj
 
 !INCLUDE ..\Makefiles\ms.app
 
-all: $(BIN_PATH)\LzmaF86Compress.bat
+all: $(BIN_PATH)\LzmaF86Compress.bat $(BIN_PATH)\LzmaLoongArchCompress.bat
+
+$(BIN_PATH)\LzmaLoongArchCompress.bat: LzmaLoongArchCompress.bat
+  copy LzmaLoongArchCompress.bat $(BIN_PATH)\LzmaLoongArchCompress.bat /Y
 
 $(BIN_PATH)\LzmaF86Compress.bat: LzmaF86Compress.bat
   copy LzmaF86Compress.bat $(BIN_PATH)\LzmaF86Compress.bat /Y
@@ -34,4 +38,5 @@ $(BIN_PATH)\LzmaF86Compress.bat: LzmaF86Compress.bat
 cleanall: localCleanall
 
 localCleanall:
+  del /f /q $(BIN_PATH)\LzmaLoongArchCompress.bat > nul
   del /f /q $(BIN_PATH)\LzmaF86Compress.bat > nul

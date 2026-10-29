@@ -20,6 +20,7 @@ OBJECTS = \
   $(SDK_C)/LzmaEnc.o \
   $(SDK_C)/7zFile.o \
   $(SDK_C)/7zStream.o \
+  $(SDK_C)/BraLoongArch.o \
   $(SDK_C)/Bra86.o
 
 include $(MAKEROOT)/Makefiles/app.makefile

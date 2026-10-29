@@ -1,0 +1,36 @@
+## @file
+# Experimental LoongArch BCJ + LZMA with ordinary LZMA compatibility.
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+##
+[Defines]
+  INF_VERSION = 0x00010005
+  BASE_NAME = LzmaLoongArchDecompressLib
+  FILE_GUID = 42DB412F-2D01-46DC-902E-4C6C53690C1A
+  MODULE_TYPE = BASE
+  VERSION_STRING = 0.1
+  LIBRARY_CLASS = NULL
+  CONSTRUCTOR = LzmaLoongArchDecompressLibConstructor
+
+[Sources]
+  LzmaDecompress.c
+  GuidedSectionExtraction.c
+  LoongArchGuidedSectionExtraction.c
+  Sdk/C/LzmaDec.c
+  Sdk/C/BraLoongArch.c
+  Sdk/C/BraLoongArch.h
+  UefiLzma.h
+  LzmaDecompressLibInternal.h
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+
+[Guids]
+  gLzmaCustomDecompressGuid          ## PRODUCES ## GUID
+  gLzmaLoongArchCustomDecompressGuid ## PRODUCES ## GUID
+
+[LibraryClasses]
+  BaseLib
+  DebugLib
+  BaseMemoryLib
+  ExtractGuidedSectionLib

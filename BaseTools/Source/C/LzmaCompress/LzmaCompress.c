@@ -22,6 +22,7 @@
 #include "Sdk/C/LzmaDec.h"
 #include "Sdk/C/LzmaEnc.h"
 #include "Sdk/C/Bra.h"
+#include "Sdk/C/BraLoongArch.h"
 #include "CommonLib.h"
 #include "ParseInf.h"
 
@@ -30,6 +31,7 @@
 typedef enum {
   NoConverter,
   X86Converter,
+  LoongArchConverter,
   MaxConverter
 } CONVERTER_TYPE;
 
@@ -60,6 +62,7 @@ void PrintHelp(char *buffer)
              "  -d: decode file\n"
              "  -o FileName, --output FileName: specify the output filename\n"
              "  --f86: enable converter for x86 code\n"
+             "  --floongarch: enable experimental LoongArch converter\n"
              "  -v, --verbose: increase output messages\n"
              "  -q, --quiet: reduce output messages\n"
              "  --debug [0-9]: set debug level\n"
@@ -145,6 +148,8 @@ static SRes Encode(ISeqOutStream *outStream, ISeqInStream *inStream, UInt64 file
         x86_Convert_Init(x86State);
         x86_Convert(filteredStream, (SizeT) inSize, 0, &x86State, 1);
       }
+    } else if (mConType == LoongArchConverter) {
+      LoongArch_Convert(filteredStream, (SizeT) inSize, 0, 1);
     }
   }
 
@@ -226,6 +231,8 @@ static SRes Decode(ISeqOutStream *outStream, ISeqInStream *inStream, UInt64 file
     UInt32 x86State;
     x86_Convert_Init(x86State);
     x86_Convert(outBuffer, (SizeT) outSize, 0, &x86State, 0);
+  } else if (mConType == LoongArchConverter) {
+    LoongArch_Convert(outBuffer, (SizeT) outSize, 0, 0);
   }
 
   if (outStream->Write(outStream, outBuffer, outSize) != outSize)
@@ -271,7 +278,13 @@ int main2(int numArgs, const char *args[], char *rs)
       encodeMode = (args[param][1] == 'e');
       modeWasSet = True;
     } else if (strcmp(args[param], "--f86") == 0) {
+      if (mConType != NoConverter && mConType != X86Converter)
+        return PrintUserError(rs);
       mConType = X86Converter;
+    } else if (strcmp(args[param], "--floongarch") == 0) {
+      if (mConType != NoConverter && mConType != LoongArchConverter)
+        return PrintUserError(rs);
+      mConType = LoongArchConverter;
     } else if (strcmp(args[param], "-o") == 0 ||
                strcmp(args[param], "--output") == 0) {
       if (numArgs < (param + 2)) {

@@ -26,4 +26,9 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 extern GUID  gLzmaCustomDecompressGuid;
 extern GUID  gLzmaF86CustomDecompressGuid;
 
+// Experimental format pinned to XZ PR173 e74f96fd.
+#define LZMA_LOONGARCH_CUSTOM_DECOMPRESS_GUID  \
+  { 0x6E11988C, 0xBC47, 0x45B6, { 0xA9, 0xDC, 0x23, 0x89, 0x83, 0x43, 0x2D, 0x70 } }
+extern GUID  gLzmaLoongArchCustomDecompressGuid;
+
 #endif

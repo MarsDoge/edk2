@@ -2296,6 +2296,10 @@ RELEASE_XCODE5_X64_CC_FLAGS   = -target x86_64-pc-win32-macho -c    -Os       -W
 *_*_*_LZMAF86_PATH         = LzmaF86Compress
 *_*_*_LZMAF86_GUID         = D42AE6BD-1352-4bfb-909A-CA72A6EAE889
 
+# Experimental whole-buffer LoongArch BCJ + LZMA.
+*_*_*_LZMALOONGARCH_PATH   = LzmaLoongArchCompress
+*_*_*_LZMALOONGARCH_GUID   = 6E11988C-BC47-45B6-A9DC-238983432D70
+
 ##################
 # TianoCompress tool definitions
 ##################
