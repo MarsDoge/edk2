@@ -1,0 +1,162 @@
+name: Verify SubmitX64ENVBug container patch
+run-name: "SubmitX64ENVBug a2926a6 - Fedora 43 and 45 EmulatorPkg"
+on:
+  push:
+    branches: [verify/fedora43-c9a5d05-emulator]
+    paths: [.github/workflows/verify-submit-x64-env-bug.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    name: "Branch patch - Fedora ${{ matrix.fedora }}"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        fedora: ["43", "45"]
+    steps:
+      - name: Checkout the exact container patch
+        uses: actions/checkout@v4
+        with:
+          repository: kilaterlee/containers
+          ref: a2926a6167fbe505c7ac80a2710c199af43652ac
+          path: containers-src
+          persist-credentials: false
+      - name: Checkout the same EDK2 source as the regression test
+        uses: actions/checkout@v4
+        with:
+          repository: tianocore/edk2
+          ref: a988b13b33abecf805da119a4abf63c84d1183b3
+          path: edk2
+          persist-credentials: false
+      - name: Build the branch Dockerfile without modifications
+        id: image
+        working-directory: edk2
+        env:
+          FEDORA: ${{ matrix.fedora }}
+          DOCKER_BUILDKIT: "1"
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p verification-logs
+          set +e
+          docker build --progress=plain --platform linux/amd64 --target test \
+            --tag "local/fedora-$FEDORA-patch:test" \
+            "../containers-src/Fedora-$FEDORA" 2>&1 | tee verification-logs/image-build.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          printf '%s\n' "$rc" > verification-logs/image-exit-code.txt
+          if [ "$rc" -eq 0 ]; then
+            docker image inspect "local/fedora-$FEDORA-patch:test" > verification-logs/image-inspect.json
+          fi
+          exit "$rc"
+      - name: Compile EmulatorPkg with the branch image defaults
+        id: firmware
+        working-directory: edk2
+        env:
+          FEDORA: ${{ matrix.fedora }}
+          VALIDATION_MODE: branch-defaults
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -i --user 0 -e VALIDATION_MODE -e PYTHONUNBUFFERED=1 \
+            -v "$GITHUB_WORKSPACE/edk2:/work" -w /work \
+            "local/fedora-$FEDORA-patch:test" bash -s <<'INNER' 2>&1 | tee verification-logs/session.log
+          set -euo pipefail
+          git config --global --add safe.directory /work
+          cat /etc/os-release
+          echo "Original GCC_BIN=${GCC_BIN-} GCC_X64_PREFIX=${GCC_X64_PREFIX-}"
+          rpm -q gcc gcc-x86_64-linux-gnu glibc-devel
+          cat >/tmp/stdio-probe.c <<'C'
+          #include <stdio.h>
+          int main(void) { puts("stdio probe OK"); return 0; }
+          C
+          for cc in /usr/bin/gcc /usr/bin/x86_64-linux-gnu-gcc; do
+            echo "===== PROBE $cc ====="
+            "$cc" --version | head -n 1
+            "$cc" -print-sysroot
+            "$cc" -E -v -xc /dev/null -o /dev/null
+            if "$cc" /tmp/stdio-probe.c -o /tmp/stdio-probe; then
+              echo "PROBE_RESULT $cc PASS"
+              /tmp/stdio-probe
+            else
+              rc=$?
+              echo "PROBE_RESULT $cc FAIL rc=$rc"
+            fi
+          done
+          echo "BUILD_MODE=$VALIDATION_MODE GCC_BIN=${GCC_BIN-} GCC_X64_PREFIX=${GCC_X64_PREFIX-}"
+          virtualenv /tmp/verify-venv
+          . /tmp/verify-venv/bin/activate
+          pip install --upgrade -r pip-requirements.txt
+          stuart_setup -c EmulatorPkg/PlatformCI/PlatformBuild.py TOOL_CHAIN_TAG=GCC -t DEBUG -a X64 BLD_*_NO_PLATFORM_BOOT_DELAYS
+          stuart_update -c EmulatorPkg/PlatformCI/PlatformBuild.py TOOL_CHAIN_TAG=GCC -t DEBUG -a X64 BLD_*_NO_PLATFORM_BOOT_DELAYS
+          python BaseTools/Edk2ToolsBuild.py -t GCC
+          set +e
+          stuart_build -c EmulatorPkg/PlatformCI/PlatformBuild.py TOOL_CHAIN_TAG=GCC TARGET=DEBUG -a X64 BLD_*_NO_PLATFORM_BOOT_DELAYS 2>&1 | tee verification-logs/build.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          echo "BUILD_RESULT mode=$VALIDATION_MODE rc=$rc"
+          printf '%s\n' "$rc" > verification-logs/build-exit-code.txt
+          if [ "$rc" -eq 0 ]; then
+            test -f Build/EmulatorX64/DEBUG_GCC/X64/Host
+          fi
+          exit "$rc"
+          INNER
+      - name: Publish the result and any failure annotation
+        if: always()
+        env:
+          FEDORA: ${{ matrix.fedora }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          root = pathlib.Path("edk2/verification-logs")
+          root.mkdir(parents=True, exist_ok=True)
+          def read_code(name):
+              p = root / name
+              return int(p.read_text().strip()) if p.exists() else None
+          image_rc = read_code("image-exit-code.txt")
+          build_rc = read_code("build-exit-code.txt")
+          p = root / "build.log"
+          log = p.read_text(errors="replace") if p.exists() else ""
+          signature = "fatal error: stdio.h: No such file or directory"
+          if image_rc != 0:
+              outcome = "IMAGE BUILD FAILED / INCOMPLETE"
+              reason = "The container image could not be built; EmulatorPkg was not tested."
+          elif build_rc == 0:
+              outcome = "EMULATORPKG BUILD PASSED"
+              reason = "The full EmulatorPkg X64 DEBUG build passed with the branch image defaults."
+          elif signature in log:
+              outcome = "EMULATORPKG BUILD FAILED"
+              reason = signature
+          else:
+              outcome = "EMULATORPKG BUILD FAILED / INCOMPLETE"
+              reason = "Inspect setup and compiler logs; this failure is not classified as the stdio.h regression."
+          data = {"fedora": os.environ["FEDORA"], "image_exit_code": image_rc, "firmware_exit_code": build_rc, "outcome": outcome, "reason": reason}
+          (root / "result.json").write_text(json.dumps(data, indent=2))
+          icon = "✅" if build_rc == 0 else "❌"
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as out:
+              out.write(f'## {icon} Fedora {data["fedora"]}: {outcome}\n\n')
+              out.write("| Stage | Actual exit code |\n|---|---|\n")
+              out.write(f"| Build branch container image | {image_rc} |\n| Compile EmulatorPkg X64 DEBUG | {build_rc} |\n\n")
+              out.write(f"```text\n{reason}\n```\n\n")
+              out.write("Container source: [kilaterlee/containers SubmitX64ENVBug @ a2926a6](https://github.com/kilaterlee/containers/commit/a2926a6167fbe505c7ac80a2710c199af43652ac).\n\n")
+              out.write("EDK2 source: `a988b13b33abecf805da119a4abf63c84d1183b3` (same as the earlier regression test).\n\n")
+              out.write("Dockerfile built unchanged with `--platform linux/amd64 --target test`. **No GCC environment overrides or firmware source patches were applied.**\n\n")
+              out.write("Scope: x86_64 image build and EmulatorPkg X64 DEBUG compilation. No AArch64 image or boot test. Fresh distribution dependencies may differ from the previously published image.\n\n")
+              out.write("Previous baseline/fix comparison: https://github.com/MarsDoge/edk2/actions/runs/41983333645\n")
+          if build_rc != 0:
+              print(f"::error title=Fedora {data['fedora']} validation::{outcome}: {reason}")
+          PY
+      - name: Upload build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: submit-x64-env-bug-fedora-${{ matrix.fedora }}-a2926a6
+          path: |
+            edk2/verification-logs/
+            edk2/Build/BUILDLOG_*.txt
+            containers-src/Fedora-${{ matrix.fedora }}/Dockerfile
+          retention-days: 90
