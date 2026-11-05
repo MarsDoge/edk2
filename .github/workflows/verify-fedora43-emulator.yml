@@ -1,0 +1,96 @@
+name: Verify Fedora 43 EmulatorPkg
+on:
+  push:
+    branches: [verify/fedora43-c9a5d05-emulator]
+    paths: [.github/workflows/verify-fedora43-emulator.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: EmulatorPkg DEBUG (${{ matrix.mode }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [original, native]
+    steps:
+      - name: Checkout the exact failing Azure build source
+        uses: actions/checkout@v4
+        with:
+          repository: tianocore/edk2
+          ref: a988b13b33abecf805da119a4abf63c84d1183b3
+          persist-credentials: false
+      - name: Probe compilers and build EmulatorPkg
+        env:
+          VALIDATION_MODE: ${{ matrix.mode }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p verification-logs
+          image=ghcr.io/tianocore/containers/fedora-43-test@sha256:311c4864f65e42f6981c56e2b95a95921887a5e29eb51a0970c44f6f6e1c787a
+          docker pull "$image"
+          docker image inspect "$image" --format '{{json .RepoDigests}}'
+          docker run --rm -i --user 0 -e VALIDATION_MODE -e PYTHONUNBUFFERED=1 \
+            -v "$GITHUB_WORKSPACE:/work" -w /work "$image" bash -s <<'INNER' 2>&1 | tee verification-logs/session.log
+          set -euo pipefail
+          git config --global --add safe.directory /work
+          cat /etc/os-release
+          echo "Original GCC_BIN=${GCC_BIN-} GCC_X64_PREFIX=${GCC_X64_PREFIX-}"
+          rpm -q gcc gcc-x86_64-linux-gnu glibc-devel
+          cat >/tmp/stdio-probe.c <<'C'
+          #include <stdio.h>
+          int main(void) { puts("stdio probe OK"); return 0; }
+          C
+          for cc in /usr/bin/gcc /usr/bin/x86_64-linux-gnu-gcc; do
+            echo "===== PROBE $cc ====="
+            "$cc" --version | head -n 1
+            "$cc" -print-sysroot
+            "$cc" -E -v -xc /dev/null -o /dev/null
+            if "$cc" /tmp/stdio-probe.c -o /tmp/stdio-probe; then
+              echo "PROBE_RESULT $cc PASS"
+              /tmp/stdio-probe
+            else
+              rc=$?
+              echo "PROBE_RESULT $cc FAIL rc=$rc"
+            fi
+          done
+          if [ "$VALIDATION_MODE" = native ]; then
+            export GCC_BIN=/usr/bin/
+            export GCC_X64_PREFIX=/usr/bin/
+          fi
+          echo "BUILD_MODE=$VALIDATION_MODE GCC_BIN=${GCC_BIN-} GCC_X64_PREFIX=${GCC_X64_PREFIX-}"
+          virtualenv /tmp/verify-venv
+          . /tmp/verify-venv/bin/activate
+          pip install --upgrade -r pip-requirements.txt
+          stuart_setup -c EmulatorPkg/PlatformCI/PlatformBuild.py TOOL_CHAIN_TAG=GCC -t DEBUG -a X64 BLD_*_NO_PLATFORM_BOOT_DELAYS
+          stuart_update -c EmulatorPkg/PlatformCI/PlatformBuild.py TOOL_CHAIN_TAG=GCC -t DEBUG -a X64 BLD_*_NO_PLATFORM_BOOT_DELAYS
+          python BaseTools/Edk2ToolsBuild.py -t GCC
+          set +e
+          stuart_build -c EmulatorPkg/PlatformCI/PlatformBuild.py TOOL_CHAIN_TAG=GCC TARGET=DEBUG -a X64 BLD_*_NO_PLATFORM_BOOT_DELAYS 2>&1 | tee verification-logs/build.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          echo "BUILD_RESULT mode=$VALIDATION_MODE rc=$rc"
+          if [ "$VALIDATION_MODE" = original ]; then
+            test "$rc" -ne 0
+            grep -F 'fatal error: stdio.h: No such file or directory' verification-logs/build.log
+            echo 'EXPECTED_STDIO_FAILURE_REPRODUCED'
+          else
+            test "$rc" -eq 0
+            test -f Build/EmulatorX64/DEBUG_GCC/X64/Host
+            echo 'NATIVE_GCC_BUILD_PASSED'
+          fi
+          INNER
+      - name: Upload verification logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fedora43-c9a5d05-${{ matrix.mode }}
+          path: |
+            verification-logs/
+            Build/BUILDLOG_*.txt
+            Build/BASETOOLS_BUILD*.txt
+          retention-days: 14
