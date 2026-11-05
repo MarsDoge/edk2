@@ -1,4 +1,5 @@
-name: Verify Fedora 43 EmulatorPkg
+name: Fedora 43 latest - EmulatorPkg regression and fix
+run-name: "Fedora 43 c9a5d05: original compiler vs native GCC"
 on:
   push:
     branches: [verify/fedora43-c9a5d05-emulator]
@@ -10,13 +11,17 @@ permissions:
 
 jobs:
   build:
-    name: EmulatorPkg DEBUG (${{ matrix.mode }})
+    name: ${{ matrix.label }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
-        mode: [original, native]
+        include:
+          - mode: original
+            label: "BEFORE - Original image configuration"
+          - mode: native
+            label: "AFTER - Native GCC override"
     steps:
       - name: Checkout the exact failing Azure build source
         uses: actions/checkout@v4
@@ -24,7 +29,7 @@ jobs:
           repository: tianocore/edk2
           ref: a988b13b33abecf805da119a4abf63c84d1183b3
           persist-credentials: false
-      - name: Probe compilers and build EmulatorPkg
+      - name: Compile EmulatorPkg - preserve the actual exit code
         env:
           VALIDATION_MODE: ${{ matrix.mode }}
         shell: bash
@@ -74,16 +79,48 @@ jobs:
           rc=${PIPESTATUS[0]}
           set -e
           echo "BUILD_RESULT mode=$VALIDATION_MODE rc=$rc"
-          if [ "$VALIDATION_MODE" = original ]; then
-            test "$rc" -ne 0
-            grep -F 'fatal error: stdio.h: No such file or directory' verification-logs/build.log
-            echo 'EXPECTED_STDIO_FAILURE_REPRODUCED'
-          else
-            test "$rc" -eq 0
+          printf '%s\n' "$rc" > verification-logs/build-exit-code.txt
+          if [ "$rc" -eq 0 ]; then
             test -f Build/EmulatorX64/DEBUG_GCC/X64/Host
-            echo 'NATIVE_GCC_BUILD_PASSED'
           fi
+          exit "$rc"
           INNER
+      - name: Publish the actual result and error annotation
+        if: always()
+        env:
+          VALIDATION_MODE: ${{ matrix.mode }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          root = pathlib.Path("verification-logs")
+          root.mkdir(exist_ok=True)
+          code = root / "build-exit-code.txt"
+          rc = int(code.read_text().strip()) if code.exists() else None
+          log = (root / "build.log").read_text(errors="replace") if (root / "build.log").exists() else ""
+          signature = "fatal error: stdio.h: No such file or directory"
+          mode = os.environ["VALIDATION_MODE"]
+          status = "PASS" if rc == 0 else ("FAIL" if rc is not None else "INCOMPLETE")
+          reason = signature if signature in log else ("Build completed" if rc == 0 else "See full logs; failure is not classified as the stdio.h regression")
+          data = {"mode": mode, "status": status, "exit_code": rc, "reason": reason}
+          (root / "result.json").write_text(json.dumps(data, indent=2))
+          label = "BEFORE: original image configuration" if mode == "original" else "AFTER: native GCC override"
+          icon = "✅" if rc == 0 else "❌"
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as out:
+              out.write(f"## {icon} {label}\n\n")
+              out.write(f"**Actual EmulatorPkg X64 DEBUG build: {status}. Exit code: {rc}.**\n\n")
+              out.write(f"```text\n{reason}\n```\n\n")
+              out.write("Image: `ghcr.io/tianocore/containers/fedora-43-test:c9a5d05` (the Fedora 43 `latest` digest checked on 2026-11-05).\n\n")
+              out.write("EDK2 source: `a988b13b33abecf805da119a4abf63c84d1183b3`, the source of Azure build 302145.\n\n")
+              out.write("Both jobs use the same immutable image digest and source. Only the native job overrides `GCC_BIN=/usr/bin/` and `GCC_X64_PREFIX=/usr/bin/`.\n\n")
+              out.write("A compiler failure is deliberately propagated as a red job. This workflow does not turn an expected failure into success.\n")
+          if rc is not None and rc != 0:
+              print(f"::error file=EmulatorPkg/Unix/Host/Host.h,line=23,title=EmulatorPkg compilation FAILED::{reason}. Actual build exit code: {rc}.")
+          elif rc == 0:
+              print("::notice title=EmulatorPkg compilation PASSED::The full X64 DEBUG build succeeded using native GCC.")
+          else:
+              print("::error title=Validation incomplete::The build did not produce an exit code. Inspect setup logs.")
+          PY
       - name: Upload verification logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -93,4 +130,44 @@ jobs:
             verification-logs/
             Build/BUILDLOG_*.txt
             Build/BASETOOLS_BUILD*.txt
-          retention-days: 14
+          retention-days: 90
+
+  comparison:
+    name: "Results - compiler comparison"
+    if: always()
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download evidence
+        uses: actions/download-artifact@v4
+        with:
+          pattern: fedora43-c9a5d05-*
+          path: evidence
+      - name: Write comparison table
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          rows = {}
+          for path in pathlib.Path("evidence").rglob("result.json"):
+              data = json.loads(path.read_text())
+              rows[data["mode"]] = data
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as out:
+              out.write("# Fedora 43 latest: EmulatorPkg build regression\n\n")
+              out.write("Tested image: `fedora-43-test:c9a5d05`. Its digest matched `fedora-43-test:latest` when checked on 2026-11-05.\n\n")
+              out.write("Pinned digest: `sha256:311c4864f65e42f6981c56e2b95a95921887a5e29eb51a0970c44f6f6e1c787a`.\n\n")
+              out.write("| Configuration | Actual build result | Exit code | Evidence |\n|---|---|---|---|\n")
+              for mode, label in [("original", "BEFORE — image defaults"), ("native", "AFTER — native GCC")]:
+                  d = rows.get(mode, {"status": "MISSING", "exit_code": None, "reason": "No result artifact"})
+                  icon = "✅" if d["status"] == "PASS" else "❌"
+                  out.write(f'| {label} | {icon} {d["status"]} | {d["exit_code"]} | {d["reason"]} |\n')
+              before, after = rows.get("original", {}), rows.get("native", {})
+              if before.get("status") == "FAIL" and "stdio.h" in before.get("reason", "") and after.get("status") == "PASS":
+                  out.write("\n**Confirmed: image defaults reproduce the missing stdio.h failure; the same source builds successfully after selecting native GCC.**\n")
+              else:
+                  out.write("\n**The expected before/after result was not fully established. Inspect the job logs.**\n")
+              out.write("\n## Change tested\n\n```bash\nexport GCC_BIN=/usr/bin/\nexport GCC_X64_PREFIX=/usr/bin/\n```\n\n")
+              out.write("No packages were added to the image and no firmware source was patched. The baseline job is RED because its compiler exit code is propagated.\n\n")
+              out.write("Scope: EmulatorPkg X64 DEBUG compilation on an x86_64 runner. No boot test or other build configurations were run. This run does not claim Fedora 45 verification.\n\n")
+              out.write("Full compiler probes, build logs and result JSON files are attached as artifacts (90-day retention).\n")
+          PY
